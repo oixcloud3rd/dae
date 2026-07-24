@@ -60,3 +60,5 @@ jobs:
             ${{ steps.prep.outputs.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: |
+            oixcloud_dns_auth_private_key=${{ secrets.OIXCLOUD_DNS_AUTH_PRIVATE_KEY }}

@@ -69,6 +69,22 @@ default port: 53
 
 内置目标 `asis` 沿用客户端所用的地址和端口，但不沿用客户端的传输方式：dae 总是通过 UDP 查询该服务器，即使客户端是通过 TCP 发起查询。`asis` 不会通过 TCP 重试。该服务器回复 `TC=1` 时，dae 丢弃服务器的响应。dae 改为根据客户端的查询构造一条消息回复客户端：ID 和 Question 段与查询相同，`NOERROR`、`RA=1`、`TC=1`，Answer 段为空。之后由客户端决定是否通过 TCP 重试。其他协议仍使用各自指定的传输方式。
 
+## oixCloud 查询认证
+
+在任意远程 DNS 协议前添加 `oixcloud+` 即可启用查询认证：
+
+```text
+oixcloud+udp://dns.example.com:53
+oixcloud+tcp+udp://dns.example.com:53
+oixcloud+https://dns.example.com:443/dns-query
+```
+
+该前缀支持 `udp`、`tcp`、`tcp+udp`、`udp+tcp`、`tls`、`https`、`quic`、`h3` 和 `http3`。dae 使用构建时嵌入的 Ed25519 私钥和固定的 300 秒时间窗为每个查询域名签名；签名编码为两个小写 Base32 标签并添加到查询名之前。响应进入路由和缓存前，其中匹配的名称会被恢复。
+
+此功能认证查询，但不加密 DNS 报文。如需传输保密性，请使用 `oixcloud+tls`、`oixcloud+https`、`oixcloud+quic` 或 `oixcloud+h3`。
+
+构建产物必须包含有效的 oixCloud 私钥。配置包含 oixCloud 上游但密钥缺失或无效时，加载配置会失败；签名后无法形成合法 DNS 名称的请求也会直接失败，不会以未签名形式发送。源码构建时可通过环境变量 `OIXCLOUD_DNS_AUTH_PRIVATE_KEY` 注入 Base64 编码的 32 字节 Ed25519 seed。
+
 ## 示例
 
 ```shell
