@@ -1,12 +1,28 @@
 name: Docker
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The tag version you want to build"
+        type: string
+        required: true
+      latest:
+        description: "Also publish the latest tag"
+        type: boolean
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       tag:
         description: "The tag version you want to build"
         type: string
         required: false
+      latest:
+        description: "Also publish the latest tag"
+        type: boolean
+        required: false
+        default: false
   push:
     branches:
       - main-patch
@@ -18,9 +34,6 @@ on:
       - "go.sum"
       - "Dockerfile"
       - ".github/workflows/docker.yml"
-  release:
-    types: [ published ]
-
 permissions:
   contents: read
   packages: write
@@ -35,7 +48,7 @@ jobs:
       - name: Get commit to build
         id: ref
         env:
-          INPUT_TAG: ${{ github.event.inputs.tag }}
+          INPUT_TAG: ${{ inputs.tag }}
           REF_NAME: ${{ github.ref_name }}
         run: |-
           if [[ -z "$INPUT_TAG" ]]; then
@@ -54,7 +67,8 @@ jobs:
         id: version
         env:
           EVENT_NAME: ${{ github.event_name }}
-          INPUT_TAG: ${{ github.event.inputs.tag }}
+          INPUT_TAG: ${{ inputs.tag }}
+          PUBLISH_LATEST: ${{ inputs.latest }}
           REF: ${{ steps.ref.outputs.ref }}
         run: |
           if [[ "$EVENT_NAME" == "push" || ( "$EVENT_NAME" == "workflow_dispatch" && -z "$INPUT_TAG" ) ]]; then
@@ -70,7 +84,7 @@ jobs:
             echo "version=$version"
             echo "tags<<EOF"
             echo "${REGISTRY_IMAGE}:${version}"
-            if [[ "$EVENT_NAME" == "release" ]]; then
+            if [[ "$PUBLISH_LATEST" == "true" ]]; then
               echo "${REGISTRY_IMAGE}:latest"
             fi
             echo "EOF"
