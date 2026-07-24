@@ -456,7 +456,7 @@ func (proxy oixCloudProxy) snellLink() (string, error) {
 		return "", fmt.Errorf("unsupported Snell fields: %s", joinedMapKeys(proxy.UnsupportedOptions))
 	}
 	if len(proxy.ALPN) != 0 || proxy.ClientFingerprint != "" || proxy.SNI != "" || proxy.ServerName != "" || proxy.SkipCertVerify != nil {
-		return "", errors.New("Snell TLS options must be nested under obfs-opts")
+		return "", errors.New("snell TLS options must be nested under obfs-opts")
 	}
 	userKey, err := coalesceField("user key", proxy.UserKey, proxy.UserKeyDashed)
 	if err != nil {
@@ -504,7 +504,7 @@ func addSnellObfsQuery(query url.Values, obfs *oixCloudSnellObfs) error {
 		return fmt.Errorf("unsupported Snell obfs fields: %s", joinedMapKeys(obfs.UnsupportedOptions))
 	}
 	if obfs.Mode == "" {
-		return errors.New("Snell obfs-opts.mode is required")
+		return errors.New("snell obfs-opts.mode is required")
 	}
 	query.Set("obfs", obfs.Mode)
 	if obfs.Host != "" {
