@@ -295,6 +295,7 @@ jobs:
     name: Publish packages
     if: github.event_name != 'push'
     needs: [build]
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
