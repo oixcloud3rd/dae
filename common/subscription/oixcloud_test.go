@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,12 +31,30 @@ import (
 
 const testOIXCloudHMACKey = "test-oixcloud-subscription-key"
 
+func TestOIXCloudManagedConfigEndpoints(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, "https://oics.net/api/v1/managed/flclash/direct", oixCloudPrimaryAPIEndpoint)
+	require.Equal(t, "https://oix-api.dler.io/api/v1/managed/flclash/direct", oixCloudFallbackAPIEndpoint)
+}
+
 func TestRedactSubscription(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "cloud:oixcloud://<redacted>", RedactSubscription("cloud:oixcloud://secret-token?foo=bar"))
 	require.Equal(t, "oixcloud+file://<redacted>", RedactSubscription("oixcloud+file://secret-token"))
 	require.Equal(t, "oixcloud://<redacted>", RedactSubscription("oixcloud://bad%token"))
 	require.Equal(t, "https://example.com/sub", RedactSubscription("https://example.com/sub"))
+}
+
+func TestSanitizedOIXCloudRequestErrorKeepsCauseWithoutURL(t *testing.T) {
+	t.Parallel()
+	err := sanitizedOIXCloudRequestError(&url.Error{
+		Op:  "Get",
+		URL: "https://oix-api.dler.io/path?secret=query-value",
+		Err: errors.New("dial timeout"),
+	})
+	require.ErrorContains(t, err, "dial timeout")
+	require.NotContains(t, err.Error(), "query-value")
+	require.NotContains(t, err.Error(), "oix-api.dler.io/path")
 }
 
 func TestResolveSubscriptionAsOIXCloud(t *testing.T) {
@@ -166,6 +186,36 @@ func TestFetchOIXCloudConfigPlainAndSigned(t *testing.T) {
 	got, err := fetchOIXCloudConfig(context.Background(), server.Client(), server.URL, "token-value", url.Values{"key": {"value"}}, testOIXCloudHMACKey, now)
 	require.NoError(t, err)
 	require.Equal(t, plain, got)
+}
+
+func TestResolveOIXCloudSubscriptionFallsBackToBackupAPI(t *testing.T) {
+	t.Parallel()
+	var primaryCalls atomic.Int32
+	primary := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		primaryCalls.Add(1)
+		writer.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer primary.Close()
+
+	yamlConfig := []byte("proxies: [{name: backup, type: snell, server: backup.example, port: 443, psk: password, version: 4}]\n")
+	backup := newOIXCloudTestServer(t, yamlConfig, http.StatusOK)
+	defer backup.Close()
+	u, err := url.Parse("oixcloud://token?client=dae")
+	require.NoError(t, err)
+	_, nodes, err := resolveOIXCloudSubscriptionWithEndpoints(
+		logrus.New(),
+		backup.Client(),
+		t.TempDir(),
+		"cloud",
+		u,
+		[]string{primary.URL, backup.URL},
+		testOIXCloudHMACKey,
+		time.Unix(1, 0),
+	)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, primaryCalls.Load())
+	require.Len(t, nodes, 1)
+	require.Contains(t, nodes[0], "backup.example")
 }
 
 func TestFetchOIXCloudConfigDecryptsAgeArmor(t *testing.T) {

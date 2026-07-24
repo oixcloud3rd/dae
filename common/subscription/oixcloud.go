@@ -36,13 +36,18 @@ import (
 )
 
 const (
-	oixCloudManagedConfigEndpoint = "https://oix-api.dler.io/api/v1/managed/flclash/direct"
-	oixCloudUserAgent             = "FlClash for oixCloud"
-	oixCloudResponseLimit         = 16 * 1024 * 1024
-	oixCloudConfigLimit           = 10 * 1024 * 1024
+	oixCloudManagedConfigPath   = "/api/v1/managed/flclash/direct"
+	oixCloudPrimaryAPIEndpoint  = "https://" + consts.OIXCloudManagedConfigHost + oixCloudManagedConfigPath
+	oixCloudFallbackAPIEndpoint = "https://" + consts.OIXCloudManagedConfigFallbackHost + oixCloudManagedConfigPath
+	oixCloudUserAgent           = "FlClash for oixCloud"
+	oixCloudResponseLimit       = 16 * 1024 * 1024
+	oixCloudConfigLimit         = 10 * 1024 * 1024
 )
 
-var oixCloudAgeArmorPrefix = []byte("-----BEGIN AGE ENCRYPTED FILE-----")
+var (
+	oixCloudAgeArmorPrefix         = []byte("-----BEGIN AGE ENCRYPTED FILE-----")
+	oixCloudManagedConfigEndpoints = []string{oixCloudPrimaryAPIEndpoint, oixCloudFallbackAPIEndpoint}
+)
 
 type oixCloudAPIResponse struct {
 	Ret      any    `json:"ret"`
@@ -154,19 +159,23 @@ func isOIXCloudScheme(scheme string) bool {
 }
 
 func resolveOIXCloudSubscription(log *logrus.Logger, client *http.Client, configDir, tag string, u *url.URL) (string, []string, error) {
-	return resolveOIXCloudSubscriptionWithOptions(
+	return resolveOIXCloudSubscriptionWithEndpoints(
 		log,
 		client,
 		configDir,
 		tag,
 		u,
-		oixCloudManagedConfigEndpoint,
+		oixCloudManagedConfigEndpoints,
 		consts.OIXCloudSubscriptionHMACKey,
 		time.Now(),
 	)
 }
 
 func resolveOIXCloudSubscriptionWithOptions(log *logrus.Logger, client *http.Client, configDir, tag string, u *url.URL, endpoint, key string, now time.Time) (string, []string, error) {
+	return resolveOIXCloudSubscriptionWithEndpoints(log, client, configDir, tag, u, []string{endpoint}, key, now)
+}
+
+func resolveOIXCloudSubscriptionWithEndpoints(log *logrus.Logger, client *http.Client, configDir, tag string, u *url.URL, endpoints []string, key string, now time.Time) (string, []string, error) {
 	persist := strings.EqualFold(u.Scheme, "oixcloud+file")
 	if persist && tag == "" {
 		return "", nil, errors.New("tag is required for oixcloud+file subscription")
@@ -177,27 +186,38 @@ func resolveOIXCloudSubscriptionWithOptions(log *logrus.Logger, client *http.Cli
 	if strings.TrimSpace(key) == "" {
 		return "", nil, errors.New("missing oixCloud subscription HMAC key: inject OIXCLOUD_SUBSCRIPTION_HMAC_KEY at build time")
 	}
+	if len(endpoints) == 0 {
+		return "", nil, errors.New("oixCloud managed configuration API is not configured")
+	}
 
-	plain, remoteErr := fetchOIXCloudConfig(
-		context.Background(),
-		client,
-		endpoint,
-		u.Host,
-		u.Query(),
-		key,
-		now,
-	)
-	if remoteErr == nil {
-		nodes, parseErr := ResolveSubscriptionAsOIXCloud(log, plain)
-		if parseErr == nil {
-			if persist {
-				if err := writeOIXCloudCache(configDir, tag, plain); err != nil {
-					return "", nil, fmt.Errorf("persist oixCloud subscription: %w", err)
+	var remoteErr error
+	for endpointIndex, endpoint := range endpoints {
+		plain, fetchErr := fetchOIXCloudConfig(
+			context.Background(),
+			client,
+			endpoint,
+			u.Host,
+			u.Query(),
+			key,
+			now,
+		)
+		if fetchErr == nil {
+			nodes, parseErr := ResolveSubscriptionAsOIXCloud(log, plain)
+			if parseErr == nil {
+				if persist {
+					if err := writeOIXCloudCache(configDir, tag, plain); err != nil {
+						return "", nil, fmt.Errorf("persist oixCloud subscription: %w", err)
+					}
 				}
+				return tag, nodes, nil
 			}
-			return tag, nodes, nil
+			remoteErr = parseErr
+		} else {
+			remoteErr = fetchErr
 		}
-		remoteErr = parseErr
+		if endpointIndex+1 < len(endpoints) && log != nil {
+			log.Warnln("oixCloud managed configuration API failed; trying fallback API")
+		}
 	}
 
 	if !persist {
@@ -250,7 +270,7 @@ func fetchOIXCloudConfig(ctx context.Context, client *http.Client, endpoint, tok
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, errors.New("request oixCloud managed configuration failed")
+		return nil, sanitizedOIXCloudRequestError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := readLimited(resp.Body, oixCloudResponseLimit)
@@ -289,6 +309,14 @@ func fetchOIXCloudConfig(ctx context.Context, client *http.Client, endpoint, tok
 		}
 	}
 	return configBytes, nil
+}
+
+func sanitizedOIXCloudRequestError(err error) error {
+	var urlError *url.Error
+	if errors.As(err, &urlError) && urlError.Err != nil {
+		err = urlError.Err
+	}
+	return fmt.Errorf("request oixCloud managed configuration failed: %w", err)
 }
 
 func decryptOIXCloudAge(ciphertext []byte, identity *age.X25519Identity) ([]byte, error) {

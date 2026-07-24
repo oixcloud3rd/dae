@@ -20,6 +20,7 @@ import (
 
 	"github.com/daeuniverse/dae/common"
 	"github.com/daeuniverse/dae/common/assets"
+	"github.com/daeuniverse/dae/common/consts"
 	"github.com/daeuniverse/dae/common/netutils"
 	componentdns "github.com/daeuniverse/dae/component/dns"
 	"github.com/daeuniverse/dae/component/dnstransport"
@@ -347,11 +348,16 @@ func (r *Router) WrapSubscriptionDialer(base netproxy.Dialer, rawSubscription st
 		Tag:  tag,
 		Link: link,
 	})
-	controlHost := subscriptionHost(link)
-	if !ok && r.requestMatcher == nil && controlHost == "" {
+	controlHosts := subscriptionHosts(link)
+	if !ok && r.requestMatcher == nil && len(controlHosts) == 0 {
 		return base, nil
 	}
-	return newResolvingDialer(base, r, upstream, upstream, controlHost), nil
+	dialer := newResolvingDialer(base, r, upstream, upstream, "")
+	if len(controlHosts) != 0 {
+		dialer.controlHost = controlHosts[0]
+		dialer.controlHostAliases = controlHosts[1:]
+	}
+	return dialer, nil
 }
 
 func (r *Router) WrapNodeDialer(base netproxy.Dialer, meta NodeMeta) (netproxy.Dialer, error) {
@@ -724,14 +730,29 @@ func (r *Router) lookupBootstrapIPAddr(ctx context.Context, network, host string
 }
 
 func subscriptionHost(link string) string {
-	if link == "" {
+	hosts := subscriptionHosts(link)
+	if len(hosts) == 0 {
 		return ""
+	}
+	return hosts[0]
+}
+
+func subscriptionHosts(link string) []string {
+	if link == "" {
+		return nil
 	}
 	u, err := url.Parse(link)
 	if err != nil {
-		return ""
+		return nil
 	}
-	return u.Hostname()
+	switch strings.ToLower(u.Scheme) {
+	case "oixcloud", "oixcloud+file":
+		return []string{consts.OIXCloudManagedConfigHost, consts.OIXCloudManagedConfigFallbackHost}
+	}
+	if host := u.Hostname(); host != "" {
+		return []string{host}
+	}
+	return nil
 }
 
 func sameDNSHost(a, b string) bool {
@@ -749,6 +770,7 @@ type resolvingDialer struct {
 	upstreamName        string
 	controlUpstreamName string
 	controlHost         string
+	controlHostAliases  []string
 }
 
 var errResolvingDialerRetired = errors.New("dns resolving dialer retired")
@@ -820,6 +842,11 @@ func (d *resolvingDialer) lookupIPAddr(ctx context.Context, network, host string
 	}
 	if d.controlHost != "" && sameDNSHost(host, d.controlHost) {
 		return d.lookupControlIPAddr(ctx, router, network, host)
+	}
+	for _, alias := range d.controlHostAliases {
+		if sameDNSHost(host, alias) {
+			return d.lookupControlIPAddr(ctx, router, network, host)
+		}
 	}
 	ips, err := router.LookupIPAddr(ctx, d.upstreamName, network, host)
 	if errors.Is(err, errPassthroughToBaseResolver) {
