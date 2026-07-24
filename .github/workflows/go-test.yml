@@ -17,7 +17,6 @@ on:
   push:
     branches:
       - main-patch
-      - kdae
     paths:
       - "**/*.go"
       - "go.mod"

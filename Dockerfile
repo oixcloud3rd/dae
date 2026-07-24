@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # TODO: pin the base images by digest. `docker manifest inspect` and
 # skopeo cannot reach registry-1.docker.io from the audit environment, so no
 # digest is recorded here — do not invent one. Replace the tags below with
@@ -11,7 +13,10 @@ ARG VERSION=unstable-docker
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN make OUTPUT=dae VERSION="${VERSION}" GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
+RUN --mount=type=secret,id=oixcloud_dns_auth_private_key,required=true \
+    OIXCLOUD_DNS_AUTH_PRIVATE_KEY="$(cat /run/secrets/oixcloud_dns_auth_private_key)" \
+    OIXCLOUD_DNS_AUTH_REQUIRE_PRIVATE_KEY=1 \
+    make OUTPUT=dae VERSION="${VERSION}" GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
 
 # TODO: same digest pin pending (the `alpine` tag is mutable).
 FROM alpine
