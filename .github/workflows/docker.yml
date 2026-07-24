@@ -2,6 +2,11 @@ name: Docker
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "The tag version you want to build"
+        type: string
+        required: false
   push:
     branches:
       - main-patch
@@ -11,35 +16,65 @@ on:
       - "**/*.h"
       - "go.mod"
       - "go.sum"
+      - "Dockerfile"
       - ".github/workflows/docker.yml"
   release:
-    types: [ prereleased ]
+    types: [ published ]
 
 permissions:
   contents: read
   packages: write
 
+env:
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+
 jobs:
   docker:
     runs-on: ubuntu-22.04
     steps:
+      - name: Get commit to build
+        id: ref
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |-
+          if [[ -z "$INPUT_TAG" ]]; then
+            ref="$REF_NAME"
+          else
+            ref="$INPUT_TAG"
+          fi
+          echo "ref=$ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - name: Checkout codebase
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Prepare
-        id: prep
+          ref: ${{ steps.ref.outputs.ref }}
+      - name: Get version
+        id: version
         env:
-          REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF: ${{ steps.ref.outputs.ref }}
         run: |
-          if [[ "$REF" == "refs/tags/v"* ]]; then
-            tag=$(git describe --tags $(git rev-list --tags --max-count=1))
-            tag=${tag:1}
+          if [[ "$EVENT_NAME" == "push" || ( "$EVENT_NAME" == "workflow_dispatch" && -z "$INPUT_TAG" ) ]]; then
+            date=$(git log -1 --format="%cd" --date=short | sed s/-//g)
+            count=$(git rev-list --count HEAD)
+            commit=$(git rev-parse --short HEAD)
+            version="unstable-${date}.r${count}.${commit}"
           else
-            tag=$(git log -1 --format="%cd" --date=short | sed s/-//g)
+            version="$REF"
           fi
-          echo "IMAGE=ghcr.io/${{ github.repository }}" >> $GITHUB_OUTPUT
-          echo "TAG=$tag" >> $GITHUB_OUTPUT
+          echo "version=$version"
+          {
+            echo "version=$version"
+            echo "tags<<EOF"
+            echo "${REGISTRY_IMAGE}:${version}"
+            if [[ "$EVENT_NAME" == "release" ]]; then
+              echo "${REGISTRY_IMAGE}:latest"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -59,9 +94,9 @@ jobs:
           file: Dockerfile
           platforms: linux/arm/v7,linux/arm64,linux/amd64,linux/386
           push: true
-          tags: |
-            ${{ steps.prep.outputs.IMAGE }}:${{ steps.prep.outputs.TAG }}
-            ${{ steps.prep.outputs.IMAGE }}:latest
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.version.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           secrets: |
