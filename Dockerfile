@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 FROM golang:1.26-bookworm AS builder
+ARG VERSION
 RUN apt-get update && apt-get install -y llvm-15 clang-15 git make
 ENV CLANG=clang-15
 WORKDIR /build/
@@ -10,6 +11,7 @@ ADD . .
 RUN git submodule update --init
 RUN --mount=type=secret,id=oixcloud_dns_auth_private_key,required=true \
     --mount=type=secret,id=oixcloud_subscription_hmac_key,required=true \
+    if [ -n "$VERSION" ]; then export VERSION; else unset VERSION; fi; \
     OIXCLOUD_DNS_AUTH_PRIVATE_KEY="$(cat /run/secrets/oixcloud_dns_auth_private_key)" \
     OIXCLOUD_DNS_AUTH_REQUIRE_PRIVATE_KEY=1 \
     OIXCLOUD_SUBSCRIPTION_HMAC_KEY="$(cat /run/secrets/oixcloud_subscription_hmac_key)" \
