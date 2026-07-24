@@ -100,9 +100,6 @@ BUILD_ARGS := -trimpath -ldflags "-s -w -X github.com/daeuniverse/dae/cmd.Versio
 
 .PHONY: clean-ebpf clean-ebpf-test ebpf ebpf-sync ebpf-sync-check ebpf-test-tagged ebpf-test-debug ebpf-test-debug-tagged ebpf-audit dae validate-oixcloud-dns-auth-private-key submodule submodules print-goexperiment print-goexperiment-env print-trace-unsupported
 
-validate-oixcloud-dns-auth-private-key:
-	@env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 CGO_ENABLED=0 go run ./cmd/internal/check_oixcloud_dns_auth_key
-
 ## Begin Dae Build
 dae: export GOOS=linux
 ifndef CGO_ENABLED
@@ -112,6 +109,9 @@ dae: validate-oixcloud-dns-auth-private-key ebpf
 	@echo $(CFLAGS)
 	@go build -tags=$(shell cat $(BUILD_TAGS_FILE)) -o $(OUTPUT) $(BUILD_ARGS) .
 ## End Dae Build
+
+validate-oixcloud-dns-auth-private-key:
+	@env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 CGO_ENABLED=0 go run ./cmd/internal/check_oixcloud_dns_auth_key
 
 ## Begin Git Submodules
 .gitmodules.d.mk: .gitmodules
