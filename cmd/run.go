@@ -1276,7 +1276,7 @@ func newControlPlaneWithMode(ctx context.Context, log *logrus.Logger, bpf any, d
 		for range numSubscriptions {
 			result := <-results
 			if result.err != nil {
-				log.Warnf(`failed to resolve subscription "%v": %v`, result.sub, result.err)
+				log.Warnf(`failed to resolve subscription "%v": %v`, subscription.RedactSubscription(string(result.sub)), result.err)
 				resolvingfailed = true
 			}
 			if len(result.nodes) > 0 {

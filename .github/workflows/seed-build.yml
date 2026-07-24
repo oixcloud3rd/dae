@@ -27,6 +27,8 @@ on:
     secrets:
       OIXCLOUD_DNS_AUTH_PRIVATE_KEY:
         required: false
+      OIXCLOUD_SUBSCRIPTION_HMAC_KEY:
+        required: false
 
 jobs:
   build:
@@ -79,6 +81,7 @@ jobs:
       GORISCV64: ${{ matrix.goriscv64 }}
       CGO_ENABLED: 0
       OIXCLOUD_DNS_AUTH_PRIVATE_KEY: ${{ secrets.OIXCLOUD_DNS_AUTH_PRIVATE_KEY }}
+      OIXCLOUD_SUBSCRIPTION_HMAC_KEY: ${{ secrets.OIXCLOUD_SUBSCRIPTION_HMAC_KEY }}
 
     steps:
       - name: Checkout codebase
@@ -141,6 +144,7 @@ jobs:
           export STRIP=llvm-strip-15
           if [[ "${{ inputs.build-type }}" != "pr-build" ]]; then
             export OIXCLOUD_DNS_AUTH_REQUIRE_PRIVATE_KEY=1
+            export OIXCLOUD_SUBSCRIPTION_REQUIRE_HMAC_KEY=1
           fi
           make
           cp ./install/dae.service ./build/

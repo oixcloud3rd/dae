@@ -4,9 +4,13 @@
 #
 
 OIXCLOUD_DNS_AUTH_PRIVATE_KEY_FROM_ENV := $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY)
+OIXCLOUD_SUBSCRIPTION_HMAC_KEY_FROM_ENV := $(OIXCLOUD_SUBSCRIPTION_HMAC_KEY)
 -include .env
 ifneq ($(strip $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY_FROM_ENV)),)
 OIXCLOUD_DNS_AUTH_PRIVATE_KEY := $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY_FROM_ENV)
+endif
+ifneq ($(strip $(OIXCLOUD_SUBSCRIPTION_HMAC_KEY_FROM_ENV)),)
+OIXCLOUD_SUBSCRIPTION_HMAC_KEY := $(OIXCLOUD_SUBSCRIPTION_HMAC_KEY_FROM_ENV)
 endif
 
 # The development version of clang is distributed as the 'clang' binary,
@@ -51,22 +55,28 @@ endif
 OIXCLOUD_DNS_AUTH_PRIVATE_KEY ?=
 export OIXCLOUD_DNS_AUTH_PRIVATE_KEY
 OIXCLOUD_DNS_AUTH_LDFLAGS = $(if $(strip $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY)),-X 'github.com/daeuniverse/dae/common/consts.OIXCloudDNSAuthPrivateKey=$(OIXCLOUD_DNS_AUTH_PRIVATE_KEY)')
-BUILD_ARGS := -trimpath -ldflags "-s -w -X github.com/daeuniverse/dae/cmd.Version=$(VERSION) -X github.com/daeuniverse/dae/common/consts.MaxMatchSetLen_=$(MAX_MATCH_SET_LEN) $(OIXCLOUD_DNS_AUTH_LDFLAGS)" $(BUILD_ARGS)
+OIXCLOUD_SUBSCRIPTION_HMAC_KEY ?=
+export OIXCLOUD_SUBSCRIPTION_HMAC_KEY
+OIXCLOUD_SUBSCRIPTION_LDFLAGS = $(if $(strip $(OIXCLOUD_SUBSCRIPTION_HMAC_KEY)),-X 'github.com/daeuniverse/dae/common/consts.OIXCloudSubscriptionHMACKey=$(OIXCLOUD_SUBSCRIPTION_HMAC_KEY)')
+BUILD_ARGS := -trimpath -ldflags "-s -w -X github.com/daeuniverse/dae/cmd.Version=$(VERSION) -X github.com/daeuniverse/dae/common/consts.MaxMatchSetLen_=$(MAX_MATCH_SET_LEN) $(OIXCLOUD_DNS_AUTH_LDFLAGS) $(OIXCLOUD_SUBSCRIPTION_LDFLAGS)" $(BUILD_ARGS)
 
-.PHONY: clean-ebpf ebpf ebpf-sync ebpf-sync-check ebpf-test-tagged ebpf-test-debug ebpf-test-debug-tagged ebpf-audit dae validate-oixcloud-dns-auth-private-key submodule submodules
+.PHONY: clean-ebpf ebpf ebpf-sync ebpf-sync-check ebpf-test-tagged ebpf-test-debug ebpf-test-debug-tagged ebpf-audit dae validate-oixcloud-dns-auth-private-key validate-oixcloud-subscription-hmac-key submodule submodules
 
 ## Begin Dae Build
 dae: export GOOS=linux
 ifndef CGO_ENABLED
 dae: export CGO_ENABLED=0
 endif
-dae: validate-oixcloud-dns-auth-private-key ebpf
+dae: validate-oixcloud-dns-auth-private-key validate-oixcloud-subscription-hmac-key ebpf
 	@echo $(CFLAGS)
 	@go build -tags=$(shell cat $(BUILD_TAGS_FILE)) -o $(OUTPUT) $(BUILD_ARGS) .
 ## End Dae Build
 
 validate-oixcloud-dns-auth-private-key:
 	@env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 CGO_ENABLED=0 go run ./cmd/internal/check_oixcloud_dns_auth_key
+
+validate-oixcloud-subscription-hmac-key:
+	@env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 CGO_ENABLED=0 go run ./cmd/internal/check_oixcloud_subscription_hmac_key
 
 ## Begin Git Submodules
 .gitmodules.d.mk: .gitmodules
