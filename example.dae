@@ -226,6 +226,7 @@ dns {
 
     upstream {
         # Value can be scheme://host:port, where the scheme can be tcp/udp/tcp+udp/h3/http3/quic/https/tls.
+        # Prefix a remote scheme with oixcloud+ to enable oixCloud query authentication.
         # If the protocol is h3/http3/https, it supports setting a custom path, that is, the format can be "protocol://host:port/custom path".
         # If host is a domain and has both IPv4 and IPv6 record, dae will automatically choose
         # IPv4 or IPv6 to use according to group policy (such as min latency policy).
@@ -234,6 +235,8 @@ dns {
 
         alidns: 'udp://dns.alidns.com:53'
         googledns: 'tcp+udp://dns.google:53'
+        # oixcloud_dns: 'oixcloud+udp://dns.example.com:53'
+        # oixcloud_doh: 'oixcloud+https://dns.example.com:443/dns-query'
 
         # alih3: 'h3://dns.alidns.com:443'
         # alih3_path: 'h3://dns.alidns.com:443/dns-query'

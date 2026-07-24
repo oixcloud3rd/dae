@@ -63,6 +63,22 @@ tcp+udp://<host>:<port>
 default port: 53
 ```
 
+## oixCloud query authentication
+
+Prefix any remote DNS scheme with `oixcloud+` to authenticate queries:
+
+```text
+oixcloud+udp://dns.example.com:53
+oixcloud+tcp+udp://dns.example.com:53
+oixcloud+https://dns.example.com:443/dns-query
+```
+
+The prefix is supported with `udp`, `tcp`, `tcp+udp`, `udp+tcp`, `tls`, `https`, `quic`, `h3`, and `http3`. dae signs each queried domain using the Ed25519 private key embedded at build time and a fixed 300-second time window. The signature is encoded as two lowercase Base32 labels prepended to the query name. Matching names in the response are restored before response routing and caching.
+
+This authenticates queries but does not encrypt DNS packets. Use `oixcloud+tls`, `oixcloud+https`, `oixcloud+quic`, or `oixcloud+h3` when transport confidentiality is also required.
+
+The executable must contain a valid oixCloud DNS auth private key. Configuration loading fails when an oixCloud upstream is enabled but the key is missing or invalid. A name that cannot fit in a valid signed DNS name also fails without being sent unsigned. See [Build Guide](../user-guide/build-by-yourself.md#oixcloud-dns-auth-private-key) for key injection instructions.
+
 ## Examples
 
 ```shell
@@ -83,6 +99,7 @@ dns {
 
     upstream {
         # Scheme list: tcp, udp, tcp+udp, https, tls, http3, h3, quic, details see above Schema.
+        # Prefix a remote scheme with oixcloud+ to enable oixCloud query authentication.
         # If host is a domain and has both IPv4 and IPv6 record, dae will automatically choose
         # IPv4 or IPv6 to use according to group policy (such as min latency policy).
         # Please make sure DNS traffic will go through and be forwarded by dae, which is REQUIRED for domain routing.
@@ -90,6 +107,8 @@ dns {
 
         alidns: 'udp://dns.alidns.com:53'
         googledns: 'tcp+udp://dns.google:53'
+        # oixcloud_dns: 'oixcloud+udp://dns.example.com:53'
+        # oixcloud_doh: 'oixcloud+https://dns.example.com:443/dns-query'
 
         # alih3: 'h3://dns.alidns.com:443'
         # alih3_path: 'h3://dns.alidns.com:443/dns-query'

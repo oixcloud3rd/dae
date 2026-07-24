@@ -63,6 +63,30 @@ tcp+udp://<host>:<port>
 默认端口: 53
 ```
 
+## oixCloud 查询认证
+
+在任意远程 DNS 协议前添加 `oixcloud+` 即可启用查询认证：
+
+```text
+oixcloud+udp://dns.example.com:53
+oixcloud+tcp+udp://dns.example.com:53
+oixcloud+https://dns.example.com:443/dns-query
+```
+
+该前缀支持 `udp`、`tcp`、`tcp+udp`、`udp+tcp`、`tls`、`https`、`quic`、`h3` 和 `http3`。dae 使用构建时嵌入的 Ed25519 私钥和固定的 300 秒时间窗为每个查询域名签名；签名编码为两个小写 Base32 标签并添加到查询名之前。响应进入路由和缓存前，其中匹配的名称会被恢复。
+
+此功能认证查询，但不加密 DNS 报文。如需传输保密性，请使用 `oixcloud+tls`、`oixcloud+https`、`oixcloud+quic` 或 `oixcloud+h3`。
+
+构建产物必须包含有效的 oixCloud 私钥。配置包含 oixCloud 上游但密钥缺失或无效时，加载配置会失败；签名后无法形成合法 DNS 名称的请求也会直接失败，不会以未签名形式发送。
+
+源码构建时可通过环境变量注入 Base64 编码的 32 字节 Ed25519 seed：
+
+```shell
+OIXCLOUD_DNS_AUTH_PRIVATE_KEY='<base64-ed25519-seed>' make
+```
+
+也可以将仓库根目录的 `.env.example` 复制为 `.env` 后填写密钥。私钥会存入最终二进制文件，能够访问二进制文件的攻击者仍可能提取它。
+
 ## 示例
 
 ```shell
@@ -81,6 +105,7 @@ dns {
 
     upstream {
         # 支持协议：tcp, udp, tcp+udp, https, tls, http3, h3, quic, 详情见上面的 Schema。
+        # 在远程协议前添加 oixcloud+ 可启用 oixCloud 查询认证。
         # 若主机为域名且具有 A 和 AAAA 记录，dae 自动选择 IPv4 或 IPv6 进行连接,
         # 是否走代理取决于全局的 routing（不是下面 dns 配置部分的 routing），节点选择取决于 group 的策略。
         # 请确保DNS流量经过dae且由dae转发，按域名分流需要如此！
@@ -88,6 +113,8 @@ dns {
 
         alidns: 'udp://dns.alidns.com:53'
         googledns: 'tcp+udp://dns.google:53'
+        # oixcloud_dns: 'oixcloud+udp://dns.example.com:53'
+        # oixcloud_doh: 'oixcloud+https://dns.example.com:443/dns-query'
 
         # alih3: 'h3://dns.alidns.com:443'
         # alih3_path: 'h3://dns.alidns.com:443/dns-query'

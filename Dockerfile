@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM golang:1.26-bookworm AS builder
 RUN apt-get update && apt-get install -y llvm-15 clang-15 git make
 ENV CLANG=clang-15
@@ -6,7 +8,10 @@ ADD go.mod go.sum ./
 RUN go mod download
 ADD . .
 RUN git submodule update --init
-RUN make OUTPUT=dae GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
+RUN --mount=type=secret,id=oixcloud_dns_auth_private_key,required=true \
+    OIXCLOUD_DNS_AUTH_PRIVATE_KEY="$(cat /run/secrets/oixcloud_dns_auth_private_key)" \
+    OIXCLOUD_DNS_AUTH_REQUIRE_PRIVATE_KEY=1 \
+    make OUTPUT=dae GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
 
 FROM alpine
 RUN mkdir -p /usr/local/share/dae/
