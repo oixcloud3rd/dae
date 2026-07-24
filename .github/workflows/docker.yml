@@ -62,3 +62,4 @@ jobs:
           cache-to: type=gha,mode=max
           secrets: |
             oixcloud_dns_auth_private_key=${{ secrets.OIXCLOUD_DNS_AUTH_PRIVATE_KEY }}
+            oixcloud_subscription_hmac_key=${{ secrets.OIXCLOUD_SUBSCRIPTION_HMAC_KEY }}

@@ -8,7 +8,7 @@ package config
 type Desc map[string]string
 
 var SectionSummaryDesc = Desc{
-	"subscription": "Subscriptions defined here will be resolved as nodes and merged as a part of the global node pool.\nSupport to give the subscription a tag, and filter nodes from a given subscription in the group section.",
+	"subscription": "Subscriptions defined here will be resolved as nodes and merged as a part of the global node pool.\nSupport to give the subscription a tag, and filter nodes from a given subscription in the group section.\noixcloud:// and oixcloud+file:// load managed oixCloud YAML and currently import AnyTLS and Snell proxies.",
 	"node":         "Nodes defined here will be merged as a part of the global node pool.",
 	"dns":          "See more at https://github.com/daeuniverse/dae/blob/main/docs/en/configuration/dns.md.",
 	"group":        "Node group. Groups defined here can be used as outbounds in section \"routing\".",
