@@ -47,14 +47,34 @@ For a direct Go build, inject the linker variable explicitly:
 go build -ldflags "-X github.com/daeuniverse/dae/common/consts.OIXCloudDNSAuthPrivateKey=<base64-ed25519-seed>" .
 ```
 
-For a local Docker build, pass the key as a BuildKit secret:
+## oixCloud subscription HMAC key
+
+Managed oixCloud subscriptions use a raw HMAC key embedded at link time. The key signs requests to and verifies signed responses from the managed configuration API. It has no runtime configuration source:
+
+```shell
+OIXCLOUD_SUBSCRIPTION_HMAC_KEY='<subscription-hmac-key>' make
+```
+
+The equivalent direct Go build flag is:
+
+```shell
+go build -ldflags "-X github.com/daeuniverse/dae/common/consts.OIXCloudSubscriptionHMACKey=<subscription-hmac-key>" .
+```
+
+Ordinary local builds may omit this key, but `oixcloud://` and `oixcloud+file://` subscriptions then fail with an explicit error. Distributed release and Docker builds require it.
+
+For a local Docker build, pass both oixCloud keys as BuildKit secrets:
 
 ```shell
 export OIXCLOUD_DNS_AUTH_PRIVATE_KEY='<base64-ed25519-seed>'
-docker build --secret id=oixcloud_dns_auth_private_key,env=OIXCLOUD_DNS_AUTH_PRIVATE_KEY .
+export OIXCLOUD_SUBSCRIPTION_HMAC_KEY='<subscription-hmac-key>'
+docker build \
+  --secret id=oixcloud_dns_auth_private_key,env=OIXCLOUD_DNS_AUTH_PRIVATE_KEY \
+  --secret id=oixcloud_subscription_hmac_key,env=OIXCLOUD_SUBSCRIPTION_HMAC_KEY \
+  .
 ```
 
-Distributed builds require the key and fail when it is missing or invalid. The private key is stored in the resulting executable and can be extracted by an attacker with access to the binary. Compile-time injection prevents runtime configuration but is not secure hardware-backed key storage.
+Distributed builds require both keys and fail when either is missing or invalid. Both values are stored in the resulting executable and can be extracted by an attacker with access to the binary. Compile-time injection prevents runtime configuration but is not secure hardware-backed key storage.
 
 ## Run
 

@@ -148,9 +148,12 @@ func ResolveSubscription(log *logrus.Logger, client *http.Client, configDir stri
 	/// Parse url.
 	u, err := url.Parse(subscription)
 	if err != nil {
-		return tag, nil, fmt.Errorf("failed to parse subscription \"%v\": %w", subscription, err)
+		return tag, nil, fmt.Errorf("failed to parse subscription \"%v\": %w", RedactSubscription(subscription), err)
 	}
-	log.Debugf("ResolveSubscription: %v", subscription)
+	log.Debugf("ResolveSubscription: %v", RedactSubscription(subscription))
+	if isOIXCloudScheme(u.Scheme) {
+		return resolveOIXCloudSubscription(log, client, configDir, tag, u)
+	}
 	var (
 		b    []byte
 		req  *http.Request

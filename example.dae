@@ -170,6 +170,14 @@ subscription {
     # This file will serve as a fallback when fetching the subscription via a link fails.
     # It will be updated automatically once the fetch is successful.
     persist_sub: 'https-file://www.example.com/persist_sub/link'
+
+    # oixCloud managed subscriptions currently import AnyTLS and Snell proxies.
+    # OIXCLOUD_SUBSCRIPTION_HMAC_KEY must be embedded when dae is built.
+    oixcloud: 'oixcloud://your-token'
+
+    # The +file variant requires a tag and atomically caches the decrypted YAML
+    # in config_dir/persist.d/oixcloud_cached.sub for offline fallback.
+    oixcloud_cached: 'oixcloud+file://your-token?client=dae'
 }
 
 # Nodes defined here will be merged as a part of the global node pool.

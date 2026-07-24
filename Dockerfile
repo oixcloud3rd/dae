@@ -9,8 +9,11 @@ RUN go mod download
 ADD . .
 RUN git submodule update --init
 RUN --mount=type=secret,id=oixcloud_dns_auth_private_key,required=true \
+    --mount=type=secret,id=oixcloud_subscription_hmac_key,required=true \
     OIXCLOUD_DNS_AUTH_PRIVATE_KEY="$(cat /run/secrets/oixcloud_dns_auth_private_key)" \
     OIXCLOUD_DNS_AUTH_REQUIRE_PRIVATE_KEY=1 \
+    OIXCLOUD_SUBSCRIPTION_HMAC_KEY="$(cat /run/secrets/oixcloud_subscription_hmac_key)" \
+    OIXCLOUD_SUBSCRIPTION_REQUIRE_HMAC_KEY=1 \
     make OUTPUT=dae GOFLAGS="-buildvcs=false" CC=clang CGO_ENABLED=0
 
 FROM alpine
