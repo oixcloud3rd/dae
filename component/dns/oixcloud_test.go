@@ -69,7 +69,9 @@ func TestOIXCloudTokenizeHostMatchesSingBox(t *testing.T) {
 	require.NoError(t, err)
 	second, err := encoding.DecodeString(strings.ToUpper(labels[1]))
 	require.NoError(t, err)
-	signature := append(first, second...)
+	signature := make([]byte, 0, len(first)+len(second))
+	signature = append(signature, first...)
+	signature = append(signature, second...)
 	publicKey := testOIXCloudDNSAuthPrivateKey().Public().(ed25519.PublicKey)
 	require.True(t, ed25519.Verify(publicKey, oixCloudAuthMessage("example.com", 1700000000/OIXCloudWindowSeconds), signature))
 
