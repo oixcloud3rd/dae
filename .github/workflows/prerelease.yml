@@ -12,10 +12,46 @@ jobs:
   build:
     strategy:
       matrix:
+        goos: [ linux ]
+        goarch: [ arm64, 386, riscv64, loong64, mips64, mips64le, mipsle, mips, ppc64, ppc64le, s390x ]
+        publish_packages: [ true ]
         include:
+          - goos: linux
+            goarch: arm
+            goarm: 7
+            publish_packages: true
+          - goos: linux
+            goarch: arm
+            goarm: 6
+            publish_packages: false
+          - goos: linux
+            goarch: arm
+            goarm: 5
+            publish_packages: false
           - goos: linux
             goarch: amd64
             goamd64: v1
+            publish_packages: true
+          - goos: linux
+            goarch: amd64
+            goamd64: v2
+            publish_packages: false
+          - goos: linux
+            goarch: amd64
+            goamd64: v3
+            publish_packages: false
+          - goos: linux
+            goarch: riscv64
+            goriscv64: rva20u64
+            publish_packages: false
+          - goos: linux
+            goarch: riscv64
+            goriscv64: rva22u64
+            publish_packages: false
+          - goos: linux
+            goarch: riscv64
+            goriscv64: rva23u64
+            publish_packages: false
       fail-fast: false
 
     runs-on: ubuntu-22.04
@@ -50,7 +86,7 @@ jobs:
       - name: Show workflow information
         id: get_filename
         run: |
-          export _NAME=$(jq ".[\"$GOOS-$GOARCH$GOARM$GOAMD64\"].friendlyName" -r < install/friendly-filenames.json)
+          export _NAME=$(jq ".[\"$GOOS-$GOARCH$GOARM$GOAMD64$GORISCV64\"].friendlyName" -r < install/friendly-filenames.json)
           echo "GOOS: $GOOS, GOARCH: $GOARCH, RELEASE_NAME: $_NAME"
           echo "ASSET_NAME=$_NAME" >> $GITHUB_OUTPUT
           echo "ASSET_NAME=$_NAME" >> $GITHUB_ENV
@@ -86,6 +122,7 @@ jobs:
         run: mkdir -p ./bundled/
 
       - name: Create full source archive
+        if: matrix.goarch == 'arm64'
         run: |
           zip -9vr ./bundled/dae-full-src.zip . -x .git/\* bundled/\*
           tar -I 'xz -9' -cvf ./bundled/dae-full-src.tar.xz --exclude .git --exclude bundled .
@@ -120,17 +157,48 @@ jobs:
           zip -9vr ../bundled/dae-$ASSET_NAME.zip .
 
       - name: Build Linux packages
+        if: matrix.publish_packages
         run: |
+          set -euo pipefail
           sudo apt-get install -y debsigs libarchive-tools rpm
           sudo gem install fpm
           sudo patch --forward --batch /usr/bin/debsigs < .github/patches/debsigs-gpgopts.patch
 
-          for pkg_mgr in deb rpm pacman; do
-            if [ "$pkg_mgr" = 'deb' ]; then
-              pkg_arch='amd64'
-            else
-              pkg_arch='x86_64'
-            fi
+          pkg_managers=(deb rpm)
+          case "$GOARCH" in
+            amd64 | arm64 | arm | riscv64 | loong64 | ppc64 | ppc64le)
+              pkg_managers+=(pacman)
+              ;;
+          esac
+
+          for pkg_mgr in "${pkg_managers[@]}"; do
+            case "$GOARCH" in
+              amd64)
+                if [ "$pkg_mgr" = 'deb' ]; then pkg_arch='amd64'; else pkg_arch='x86_64'; fi
+                ;;
+              386)
+                pkg_arch='i386'
+                ;;
+              arm64)
+                if [ "$pkg_mgr" = 'deb' ]; then pkg_arch='arm64'; else pkg_arch='aarch64'; fi
+                ;;
+              arm)
+                case "$pkg_mgr" in
+                  deb) pkg_arch='armhf' ;;
+                  rpm) pkg_arch='armv7hl' ;;
+                  pacman) pkg_arch='armv7h' ;;
+                esac
+                ;;
+              loong64)
+                if [ "$pkg_mgr" = 'rpm' ]; then pkg_arch='loongarch64'; else pkg_arch='loong64'; fi
+                ;;
+              mips64le) pkg_arch='mips64el' ;;
+              mipsle) pkg_arch='mipsel' ;;
+              ppc64le)
+                if [ "$pkg_mgr" = 'deb' ]; then pkg_arch='ppc64el'; else pkg_arch='ppc64le'; fi
+                ;;
+              *) pkg_arch="$GOARCH" ;;
+            esac
 
             fpm -s dir -t $pkg_mgr -a $pkg_arch -v ${VERSION/v/} -n dae \
                   --url "https://github.com/oixcloud3rd/dae" \
@@ -148,9 +216,12 @@ jobs:
                   -C pkgdir .
           done
 
-          mv ./bundled/dae-$ASSET_NAME.pacman ./bundled/dae-$ASSET_NAME.pkg.tar.zst
+          if [ -f ./bundled/dae-$ASSET_NAME.pacman ]; then
+            mv ./bundled/dae-$ASSET_NAME.pacman ./bundled/dae-$ASSET_NAME.pkg.tar.zst
+          fi
 
       - name: Set up package signing
+        if: matrix.publish_packages
         env:
           GPG_KEY: ${{ secrets.GPG_KEY }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
@@ -185,6 +256,7 @@ jobs:
           EOF
 
       - name: Sign Linux packages
+        if: matrix.publish_packages
         env:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
@@ -197,6 +269,7 @@ jobs:
           rpmsign --addsign ./bundled/*.rpm
 
       - name: Verify Linux package signatures
+        if: matrix.publish_packages
         run: |
           set -euo pipefail
           ar t ./bundled/*.deb | grep -qx '_gpgorigin'
@@ -207,7 +280,7 @@ jobs:
           rpm --dbpath "$RPM_VERIFY_DB" --checksig ./bundled/*.rpm
 
       - name: Publish packages
-        if: github.event_name != 'push'
+        if: matrix.publish_packages && github.event_name != 'push'
         run: |-
           set -euo pipefail
           for package in ./bundled/*.deb ./bundled/*.rpm; do
@@ -233,6 +306,8 @@ jobs:
           path: ./bundled/*
 
   upload-release:
+    permissions:
+      contents: write
     needs: [build]
     runs-on: ubuntu-latest
     steps:
