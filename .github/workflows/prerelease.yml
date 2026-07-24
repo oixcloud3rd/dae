@@ -279,16 +279,6 @@ jobs:
           rpm --dbpath "$RPM_VERIFY_DB" --import "$SIGNING_PUBLIC_KEY_FILE"
           rpm --dbpath "$RPM_VERIFY_DB" --checksig ./bundled/*.rpm
 
-      - name: Publish packages
-        if: matrix.publish_packages && github.event_name != 'push'
-        run: |-
-          set -euo pipefail
-          for package in ./bundled/*.deb ./bundled/*.rpm; do
-            curl --fail --silent --show-error \
-              -F "package=@${package}" \
-              "https://${{ secrets.FURY_TOKEN }}@push.fury.io/oixcloud3rd/"
-          done
-
       - name: Create signature
         run: |
           cd bundled
@@ -304,6 +294,42 @@ jobs:
         with:
           if-no-files-found: ignore
           path: ./bundled/*
+
+  publish-packages:
+    name: Publish packages
+    if: github.event_name != 'push'
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4.1.4
+        with:
+          path: packages/
+
+      - name: Upload packages to Gemfury
+        env:
+          FURY_TOKEN: ${{ secrets.FURY_TOKEN }}
+        run: |-
+          set -euo pipefail
+          mapfile -d '' package_files < <(
+            find packages -type f \( -name '*.deb' -o -name '*.rpm' \) -print0 | sort -z
+          )
+          if (( ${#package_files[@]} == 0 )); then
+            echo "No DEB or RPM packages found." >&2
+            exit 1
+          fi
+          for package in "${package_files[@]}"; do
+            echo "Publishing $(basename "$package")"
+            curl --fail --silent --show-error \
+              --retry 5 \
+              --retry-all-errors \
+              --retry-delay 5 \
+              --retry-max-time 180 \
+              --connect-timeout 30 \
+              --max-time 300 \
+              -F "package=@${package}" \
+              "https://${FURY_TOKEN}@push.fury.io/oixcloud3rd/"
+          done
 
   upload-release:
     permissions:
