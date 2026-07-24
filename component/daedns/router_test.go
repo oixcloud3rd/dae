@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"testing"
 	"time"
@@ -532,6 +533,26 @@ func TestRouterWrapSubscriptionDialerUsesBootstrapForSubscriptionHostWithoutExpl
 	}
 	if len(ips) != 1 || !ips[0].IP.Equal(net.IPv4(198, 51, 100, 10)) {
 		t.Fatalf("LookupIPAddr() = %v, want 198.51.100.10", ips)
+	}
+}
+
+func TestSubscriptionHostUsesManagedEndpointForOIXCloud(t *testing.T) {
+	t.Parallel()
+	for _, link := range []string{
+		"oixcloud://subscription-token",
+		"oixcloud+file://subscription-token?client=dae",
+	} {
+		if got, want := subscriptionHost(link), "oics.net"; got != want {
+			t.Fatalf("subscriptionHost(%q) = %q, want %q", link, got, want)
+		}
+		gotHosts := subscriptionHosts(link)
+		wantHosts := []string{"oics.net", "oix-api.dler.io"}
+		if !slices.Equal(gotHosts, wantHosts) {
+			t.Fatalf("subscriptionHosts(%q) = %q, want %q", link, gotHosts, wantHosts)
+		}
+	}
+	if got, want := subscriptionHost("https://subscription.example/list"), "subscription.example"; got != want {
+		t.Fatalf("subscriptionHost(https) = %q, want %q", got, want)
 	}
 }
 

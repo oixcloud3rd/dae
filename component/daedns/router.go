@@ -18,6 +18,7 @@ import (
 
 	"github.com/daeuniverse/dae/common"
 	"github.com/daeuniverse/dae/common/assets"
+	"github.com/daeuniverse/dae/common/consts"
 	"github.com/daeuniverse/dae/common/netutils"
 	componentdns "github.com/daeuniverse/dae/component/dns"
 	"github.com/daeuniverse/dae/component/routing"
@@ -209,17 +210,21 @@ func (r *Router) WrapSubscriptionDialer(base netproxy.Dialer, rawSubscription st
 		Tag:  tag,
 		Link: link,
 	})
-	controlHost := subscriptionHost(link)
-	if !ok && r.requestMatcher == nil && controlHost == "" {
+	controlHosts := subscriptionHosts(link)
+	if !ok && r.requestMatcher == nil && len(controlHosts) == 0 {
 		return base, nil
 	}
-	return &resolvingDialer{
+	dialer := &resolvingDialer{
 		Dialer:              base,
 		router:              r,
 		upstreamName:        upstream,
 		controlUpstreamName: upstream,
-		controlHost:         controlHost,
-	}, nil
+	}
+	if len(controlHosts) != 0 {
+		dialer.controlHost = controlHosts[0]
+		dialer.controlHostAliases = controlHosts[1:]
+	}
+	return dialer, nil
 }
 
 func (r *Router) WrapNodeDialer(base netproxy.Dialer, meta NodeMeta) (netproxy.Dialer, error) {
@@ -621,14 +626,29 @@ func (r *Router) lookupBootstrapIPAddr(ctx context.Context, network, host string
 }
 
 func subscriptionHost(link string) string {
-	if link == "" {
+	hosts := subscriptionHosts(link)
+	if len(hosts) == 0 {
 		return ""
+	}
+	return hosts[0]
+}
+
+func subscriptionHosts(link string) []string {
+	if link == "" {
+		return nil
 	}
 	u, err := url.Parse(link)
 	if err != nil {
-		return ""
+		return nil
 	}
-	return u.Hostname()
+	switch strings.ToLower(u.Scheme) {
+	case "oixcloud", "oixcloud+file":
+		return []string{consts.OIXCloudManagedConfigHost, consts.OIXCloudManagedConfigFallbackHost}
+	}
+	if host := u.Hostname(); host != "" {
+		return []string{host}
+	}
+	return nil
 }
 
 func sameDNSHost(a, b string) bool {
@@ -646,6 +666,7 @@ type resolvingDialer struct {
 	upstreamName        string
 	controlUpstreamName string
 	controlHost         string
+	controlHostAliases  []string
 }
 
 func (d *resolvingDialer) lookupBaseIPAddr(ctx context.Context, network, host string) ([]net.IPAddr, error) {
@@ -677,6 +698,11 @@ func (d *resolvingDialer) lookupControlIPAddr(ctx context.Context, network, host
 func (d *resolvingDialer) lookupIPAddr(ctx context.Context, network, host string) ([]net.IPAddr, error) {
 	if d.controlHost != "" && sameDNSHost(host, d.controlHost) {
 		return d.lookupControlIPAddr(ctx, network, host)
+	}
+	for _, alias := range d.controlHostAliases {
+		if sameDNSHost(host, alias) {
+			return d.lookupControlIPAddr(ctx, network, host)
+		}
 	}
 	ips, err := d.router.LookupIPAddr(ctx, d.upstreamName, network, host)
 	if errors.Is(err, errPassthroughToBaseResolver) {

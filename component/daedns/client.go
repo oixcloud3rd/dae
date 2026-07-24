@@ -280,6 +280,35 @@ func (r *Router) lookupType(ctx context.Context, upstream *componentdns.Upstream
 }
 
 func (r *Router) exchange(ctx context.Context, upstream *componentdns.Upstream, data []byte) (*dnsmessage.Msg, error) {
+	if !upstream.OIXCloud {
+		return r.exchangeRaw(ctx, upstream, data)
+	}
+
+	var request dnsmessage.Msg
+	if err := request.Unpack(data); err != nil {
+		return nil, fmt.Errorf("unpack oixCloud DNS request: %w", err)
+	}
+	signer, err := componentdns.NewOIXCloudSigner()
+	if err != nil {
+		return nil, err
+	}
+	signedRequest, restoreNames, err := signer.PrepareMessage(&request)
+	if err != nil {
+		return nil, err
+	}
+	signedData, err := signedRequest.Pack()
+	if err != nil {
+		return nil, fmt.Errorf("pack oixCloud DNS request: %w", err)
+	}
+
+	response, exchangeErr := r.exchangeRaw(ctx, upstream, signedData)
+	if response != nil {
+		signer.RestoreResponse(response, restoreNames)
+	}
+	return response, exchangeErr
+}
+
+func (r *Router) exchangeRaw(ctx context.Context, upstream *componentdns.Upstream, data []byte) (*dnsmessage.Msg, error) {
 	targets := upstreamTargets(upstream)
 	if len(targets) == 0 {
 		return nil, fmt.Errorf("dns upstream %q has no usable address", upstream.String())

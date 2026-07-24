@@ -1,0 +1,125 @@
+# oixCloud configuration example.
+# Replace <YOUR_TOKEN> before running dae.
+#
+# You can split the configuration into multiple files with `include { ... }`.
+#
+# Notes about include paths:
+# - Relative paths (e.g. `config.d/*.dae`) are resolved relative to the directory of the entry config file
+#   (the file you pass to `dae -c ...`), NOT relative to your current working directory.
+# - Absolute paths (e.g. `/etc/dae/config.d/*.dae`) start with "/" and are used as-is.
+# - For security reasons, dae requires included files to be under the entry config directory.
+#
+# include {
+#     # Relative path example:
+#     config.d/*.dae
+#
+#     # Absolute path example:
+#     /etc/dae/config.d/*.dae
+# }
+
+global {
+    # Bind dae to the local machine's WAN interface.
+    wan_interface: auto
+    log_level: info
+    disable_waiting_network: true
+    auto_config_kernel_parameter: true
+
+    # Use sniffed domains for outbound connections.
+    dial_mode: domain
+
+    # Use a browser-like TLS ClientHello for oixCloud AnyTLS and Snell nodes.
+    tls_implementation: utls
+    utls_imitate: chrome_auto
+}
+
+# Subscriptions defined here will be resolved as nodes and merged as a part of the global node pool.
+# Support to give the subscription a tag, and filter nodes from a given subscription in the group section.
+subscription {
+    # Managed oixCloud subscriptions currently import AnyTLS and Snell nodes.
+    # OIXCLOUD_SUBSCRIPTION_HMAC_KEY must be embedded when dae is built.
+    oixcloud: 'oixcloud://<YOUR_TOKEN>'
+
+    # The +file variant atomically caches decrypted YAML in
+    # persist.d/oixcloud_cached.sub and uses it when the remote request fails.
+    # oixcloud_cached: 'oixcloud+file://<YOUR_TOKEN>'
+}
+
+# Nodes defined here will be merged as a part of the global node pool.
+node {
+    # Add manually managed nodes here when needed. Nodes from the oixcloud
+    # subscription above are automatically merged into the global node pool.
+    # my_node: 'snell://LINK'
+}
+
+dns {
+    upstream {
+        alidns: 'udp://dns.alidns.com:53'
+        googledns: 'tcp+udp://dns.google:53'
+        oixclouddns: 'oixcloud+tcp+udp://124.221.68.73:1053'
+    }
+
+    routing {
+        request {
+            # Resolve cloud-nodes.com and its subdomains through oixCloud DNS.
+            subnode(oixcloud) && subnode(link_regex: '@(?:[^/]*\.)?cloud-nodes\.com:') -> oixclouddns
+
+            qname(geosite:cn) -> alidns
+            fallback: googledns
+        }
+
+        response {
+            fallback: accept
+        }
+    }
+}
+
+# Node group (outbound).
+group {
+    proxy {
+        # Keep this filter if only Hong Kong Fusion nodes should be selected.
+        # Remove the name() condition to use every supported oixCloud node.
+        filter: subtag(oixcloud) && name(keyword: '香港 Fusion')
+
+        # Select the node with the lowest moving-average latency.
+        policy: min_moving_avg
+
+        # Reduce health-check frequency to avoid triggering oixCloud rate limits.
+        check_interval: 600s
+
+        # These values inherit their defaults from global and may be overridden:
+        # tcp_check_url: 'http://cp.cloudflare.com'
+        # tcp_check_http_method: HEAD
+        # udp_check_dns: 'dns.google:53,8.8.8.8'
+        # check_tolerance: 50ms
+    }
+}
+
+# See https://github.com/daeuniverse/dae/blob/main/docs/en/configuration/routing.md for full examples.
+routing {
+    ### Preset rules.
+
+    # Network managers in localhost should be direct to avoid false negative network connectivity check when binding to
+    # WAN.
+    pname(NetworkManager) -> direct
+
+    # Add local DNS frontends here when they must bypass transparent proxying.
+    # pname(systemd-resolved, dnsmasq, mosdns, AdGuardHome) -> must_direct
+
+    # Put it in the front to prevent broadcast, multicast and other packets that should be sent to the LAN from being
+    # forwarded by the proxy.
+    # "dip" means destination IP.
+    dip(224.0.0.0/3, 'ff00::/8') -> direct
+
+    # This line allows you to access private addresses directly instead of via your proxy. If you really want to access
+    # private addresses in your proxy host network, modify the below line.
+    dip(geoip:private) -> direct
+
+    ### Write your rules below.
+
+    # Disable h3 because it usually consumes too much cpu/mem resources.
+    l4proto(udp) && dport(443) -> block
+    dip(geoip:cn) -> direct
+    domain(geosite:cn) -> direct
+
+    fallback: proxy
+}
