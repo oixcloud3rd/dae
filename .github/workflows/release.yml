@@ -14,44 +14,40 @@ jobs:
       matrix:
         goos: [ linux ]
         goarch: [ arm64, 386, riscv64, loong64, mips64, mips64le, mipsle, mips, ppc64, ppc64le, s390x ]
-        publish_packages: [ true ]
         include:
+          # BEGIN Linux ARM 5 6 7
           - goos: linux
             goarch: arm
             goarm: 7
-            publish_packages: true
           - goos: linux
             goarch: arm
             goarm: 6
-            publish_packages: false
           - goos: linux
             goarch: arm
             goarm: 5
-            publish_packages: false
+          # END Linux ARM 5 6 7
+          # BEGIN Linux AMD64 v1 v2 v3
           - goos: linux
             goarch: amd64
             goamd64: v1
-            publish_packages: true
           - goos: linux
             goarch: amd64
             goamd64: v2
-            publish_packages: false
           - goos: linux
             goarch: amd64
             goamd64: v3
-            publish_packages: false
+          # END Linux AMD64 v1 v2 v3
+          # BEGIN Linux RISCV64 rva20u64 rva22u64 rva23u64
           - goos: linux
             goarch: riscv64
             goriscv64: rva20u64
-            publish_packages: false
           - goos: linux
             goarch: riscv64
             goriscv64: rva22u64
-            publish_packages: false
           - goos: linux
             goarch: riscv64
             goriscv64: rva23u64
-            publish_packages: false
+          # END Linux RISCV64 rva20u64 rva22u64 rva23u64
       fail-fast: false
 
     runs-on: ubuntu-22.04
@@ -157,7 +153,7 @@ jobs:
           zip -9vr ../bundled/dae-$ASSET_NAME.zip .
 
       - name: Build Linux packages
-        if: matrix.publish_packages
+        if: ${{ env.GOARM == '7' || env.GOARM == '' }}
         run: |
           set -euo pipefail
           sudo apt-get install -y debsigs libarchive-tools rpm
@@ -221,7 +217,7 @@ jobs:
           fi
 
       - name: Set up package signing
-        if: matrix.publish_packages
+        if: ${{ env.GOARM == '7' || env.GOARM == '' }}
         env:
           GPG_KEY: ${{ secrets.GPG_KEY }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
@@ -256,7 +252,7 @@ jobs:
           EOF
 
       - name: Sign Linux packages
-        if: matrix.publish_packages
+        if: ${{ env.GOARM == '7' || env.GOARM == '' }}
         env:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
@@ -269,7 +265,7 @@ jobs:
           rpmsign --addsign ./bundled/*.rpm
 
       - name: Verify Linux package signatures
-        if: matrix.publish_packages
+        if: ${{ env.GOARM == '7' || env.GOARM == '' }}
         run: |
           set -euo pipefail
           ar t ./bundled/*.deb | grep -qx '_gpgorigin'
@@ -312,7 +308,13 @@ jobs:
         run: |-
           set -euo pipefail
           mapfile -d '' package_files < <(
-            find packages -type f \( -name '*.deb' -o -name '*.rpm' \) -print0 | sort -z
+            find packages -type f \( -name '*.deb' -o -name '*.rpm' \) \
+              ! -name '*_v2_sse.*' \
+              ! -name '*_v3_avx2.*' \
+              ! -name '*_rva20u64.*' \
+              ! -name '*_rva22u64.*' \
+              ! -name '*_rva23u64.*' \
+              -print0 | sort -z
           )
           if (( ${#package_files[@]} == 0 )); then
             echo "No DEB or RPM packages found." >&2
