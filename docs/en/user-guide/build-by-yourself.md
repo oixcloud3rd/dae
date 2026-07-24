@@ -31,6 +31,31 @@ make GOFLAGS="-buildvcs=false" \
 #make CGO_ENABLED=0 GOARCH=mips
 ```
 
+## oixCloud DNS auth private key
+
+oixCloud DNS authentication requires a Base64-encoded 32-byte Ed25519 seed embedded at link time. The standard Makefile reads it from `OIXCLOUD_DNS_AUTH_PRIVATE_KEY`:
+
+```shell
+OIXCLOUD_DNS_AUTH_PRIVATE_KEY='<base64-ed25519-seed>' make
+```
+
+Alternatively, copy `.env.example` to `.env` in the repository root and set the key there. `.env` is ignored by Git, and a value supplied through the environment or on the Make command line takes precedence. Ordinary local builds may omit the key, but configurations containing an `oixcloud+` DNS upstream then fail during startup.
+
+For a direct Go build, inject the linker variable explicitly:
+
+```shell
+go build -ldflags "-X github.com/daeuniverse/dae/common/consts.OIXCloudDNSAuthPrivateKey=<base64-ed25519-seed>" .
+```
+
+For a local Docker build, pass the key as a BuildKit secret:
+
+```shell
+export OIXCLOUD_DNS_AUTH_PRIVATE_KEY='<base64-ed25519-seed>'
+docker build --secret id=oixcloud_dns_auth_private_key,env=OIXCLOUD_DNS_AUTH_PRIVATE_KEY .
+```
+
+Distributed builds require the key and fail when it is missing or invalid. The private key is stored in the resulting executable and can be extracted by an attacker with access to the binary. Compile-time injection prevents runtime configuration but is not secure hardware-backed key storage.
+
 ## Run
 
 ### Runtime Dependencies

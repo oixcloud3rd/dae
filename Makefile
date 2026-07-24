@@ -3,6 +3,12 @@
 #  Copyright (c) 2022-2025, daeuniverse Organization <dae@v2raya.org>
 #
 
+OIXCLOUD_DNS_AUTH_PRIVATE_KEY_FROM_ENV := $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY)
+-include .env
+ifneq ($(strip $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY_FROM_ENV)),)
+OIXCLOUD_DNS_AUTH_PRIVATE_KEY := $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY_FROM_ENV)
+endif
+
 # The development version of clang is distributed as the 'clang' binary,
 # while stable/released versions have a version number attached.
 # Pin the default clang to a stable version.
@@ -42,18 +48,24 @@ else
 	VERSION ?= unstable-$(date).r$(count).$(commit)
 endif
 
-BUILD_ARGS := -trimpath -ldflags "-s -w -X github.com/daeuniverse/dae/cmd.Version=$(VERSION) -X github.com/daeuniverse/dae/common/consts.MaxMatchSetLen_=$(MAX_MATCH_SET_LEN)" $(BUILD_ARGS)
+OIXCLOUD_DNS_AUTH_PRIVATE_KEY ?=
+export OIXCLOUD_DNS_AUTH_PRIVATE_KEY
+OIXCLOUD_DNS_AUTH_LDFLAGS = $(if $(strip $(OIXCLOUD_DNS_AUTH_PRIVATE_KEY)),-X 'github.com/daeuniverse/dae/common/consts.OIXCloudDNSAuthPrivateKey=$(OIXCLOUD_DNS_AUTH_PRIVATE_KEY)')
+BUILD_ARGS := -trimpath -ldflags "-s -w -X github.com/daeuniverse/dae/cmd.Version=$(VERSION) -X github.com/daeuniverse/dae/common/consts.MaxMatchSetLen_=$(MAX_MATCH_SET_LEN) $(OIXCLOUD_DNS_AUTH_LDFLAGS)" $(BUILD_ARGS)
 
-.PHONY: clean-ebpf ebpf ebpf-sync ebpf-sync-check ebpf-test-tagged ebpf-test-debug ebpf-test-debug-tagged ebpf-audit dae submodule submodules
+.PHONY: clean-ebpf ebpf ebpf-sync ebpf-sync-check ebpf-test-tagged ebpf-test-debug ebpf-test-debug-tagged ebpf-audit dae validate-oixcloud-dns-auth-private-key submodule submodules
+
+validate-oixcloud-dns-auth-private-key:
+	@env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 CGO_ENABLED=0 go run ./cmd/internal/check_oixcloud_dns_auth_key
 
 ## Begin Dae Build
 dae: export GOOS=linux
 ifndef CGO_ENABLED
 dae: export CGO_ENABLED=0
 endif
-dae: ebpf
+dae: validate-oixcloud-dns-auth-private-key ebpf
 	@echo $(CFLAGS)
-	go build -tags=$(shell cat $(BUILD_TAGS_FILE)) -o $(OUTPUT) $(BUILD_ARGS) .
+	@go build -tags=$(shell cat $(BUILD_TAGS_FILE)) -o $(OUTPUT) $(BUILD_ARGS) .
 ## End Dae Build
 
 ## Begin Git Submodules

@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync/atomic"
 
 	"github.com/daeuniverse/dae/common/consts"
@@ -30,6 +31,7 @@ type resolveUpstreamIp46Func func(ctx context.Context, host string, network stri
 type UpstreamScheme string
 
 const (
+	oixCloudSchemePrefix                        = "oixcloud+"
 	UpstreamScheme_TCP           UpstreamScheme = "tcp"
 	UpstreamScheme_UDP           UpstreamScheme = "udp"
 	UpstreamScheme_TCP_UDP       UpstreamScheme = "tcp+udp"
@@ -42,9 +44,31 @@ const (
 )
 
 func ParseRawUpstream(raw *url.URL) (scheme UpstreamScheme, hostname string, port uint16, path string, err error) {
+	scheme, hostname, port, path, _, err = parseRawUpstream(raw)
+	return
+}
+
+func parseRawUpstream(raw *url.URL) (scheme UpstreamScheme, hostname string, port uint16, path string, oixCloud bool, err error) {
+	if raw == nil {
+		return "", "", 0, "", false, fmt.Errorf("nil upstream URL")
+	}
+	if raw.Query().Has("oixcloud") {
+		return "", "", 0, "", false, fmt.Errorf("oixCloud must be enabled with the oixcloud+ scheme prefix")
+	}
 	var __port string
 	var __path string
-	switch scheme = UpstreamScheme(raw.Scheme); scheme {
+	rawScheme := raw.Scheme
+	if strings.HasPrefix(rawScheme, oixCloudSchemePrefix) {
+		oixCloud = true
+		rawScheme = strings.TrimPrefix(rawScheme, oixCloudSchemePrefix)
+		if rawScheme == "" {
+			return "", "", 0, "", false, fmt.Errorf("oixCloud scheme is missing a base DNS scheme")
+		}
+		if strings.HasPrefix(rawScheme, oixCloudSchemePrefix) {
+			return "", "", 0, "", false, fmt.Errorf("repeated oixCloud scheme prefix")
+		}
+	}
+	switch scheme = UpstreamScheme(rawScheme); scheme {
 	case upstreamScheme_TCP_UDP_Alias:
 		scheme = UpstreamScheme_TCP_UDP
 		fallthrough
@@ -71,15 +95,15 @@ func ParseRawUpstream(raw *url.URL) (scheme UpstreamScheme, hostname string, por
 			__port = "853"
 		}
 	default:
-		return "", "", 0, "", fmt.Errorf("unexpected scheme: %v", raw.Scheme)
+		return "", "", 0, "", false, fmt.Errorf("unexpected scheme: %v", raw.Scheme)
 	}
 	_port, err := strconv.ParseUint(__port, 10, 16)
 	if err != nil {
-		return "", "", 0, "", fmt.Errorf("failed to parse dns_upstream port: %v", err)
+		return "", "", 0, "", false, fmt.Errorf("failed to parse dns_upstream port: %v", err)
 	}
 	port = uint16(_port)
 	hostname = raw.Hostname()
-	return scheme, hostname, port, __path, nil
+	return scheme, hostname, port, __path, oixCloud, nil
 }
 
 type Upstream struct {
@@ -87,13 +111,19 @@ type Upstream struct {
 	Hostname string
 	Port     uint16
 	Path     string
+	OIXCloud bool
 	*netutils.Ip46
 }
 
 func NewUpstream(ctx context.Context, upstream *url.URL, resolverNetwork string, resolveIp46 resolveUpstreamIp46Func) (up *Upstream, err error) {
-	scheme, hostname, port, path, err := ParseRawUpstream(upstream)
+	scheme, hostname, port, path, oixCloud, err := parseRawUpstream(upstream)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFormat, err)
+	}
+	if oixCloud {
+		if _, err = ParseOIXCloudDNSAuthPrivateKey(consts.OIXCloudDNSAuthPrivateKey); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrFormat, err)
+		}
 	}
 
 	ip46 := &netutils.Ip46{}
@@ -125,6 +155,7 @@ func NewUpstream(ctx context.Context, upstream *url.URL, resolverNetwork string,
 		Hostname: hostname,
 		Port:     port,
 		Path:     path,
+		OIXCloud: oixCloud,
 		Ip46:     ip46,
 	}, nil
 }
@@ -152,7 +183,11 @@ func (u *Upstream) SupportedNetworks() (ipversions []consts.IpVersionStr, l4prot
 }
 
 func (u *Upstream) String() string {
-	return string(u.Scheme) + "://" + net.JoinHostPort(u.Hostname, strconv.Itoa(int(u.Port))) + u.Path
+	scheme := string(u.Scheme)
+	if u.OIXCloud {
+		scheme = oixCloudSchemePrefix + scheme
+	}
+	return scheme + "://" + net.JoinHostPort(u.Hostname, strconv.Itoa(int(u.Port))) + u.Path
 }
 
 type UpstreamResolver struct {

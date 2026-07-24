@@ -126,9 +126,14 @@ func New(dns *config.Dns, opt *NewOption) (s *Dns, err error) {
 
 func (s *Dns) CheckUpstreamsFormat() error {
 	for _, upstream := range s.upstream {
-		_, hostname, _, _, err := ParseRawUpstream(upstream.Raw)
+		_, hostname, _, _, oixCloud, err := parseRawUpstream(upstream.Raw)
 		if err != nil {
 			return err
+		}
+		if oixCloud {
+			if _, err = ParseOIXCloudDNSAuthPrivateKey(consts.OIXCloudDNSAuthPrivateKey); err != nil {
+				return err
+			}
 		}
 		if _, err := netip.ParseAddr(hostname); err != nil && upstream.ResolveIp46 == nil {
 			return fmt.Errorf("dns upstream %q requires global.bootstrap_resolver because hostname %q is not an IP address", upstream.Raw.String(), hostname)

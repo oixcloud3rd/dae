@@ -190,6 +190,14 @@ func newDnsForwarder(upstream *dns.Upstream, dialArgument dialArgument, log *log
 	if err != nil {
 		return nil, err
 	}
+	if upstream.OIXCloud {
+		wrapped, wrapErr := newOIXCloudDnsForwarder(forwarder, log)
+		if wrapErr != nil {
+			_ = forwarder.Close()
+			return nil, wrapErr
+		}
+		return wrapped, nil
+	}
 	return forwarder, nil
 }
 

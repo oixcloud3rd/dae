@@ -58,6 +58,8 @@ jobs:
       GOAMD64: ${{ matrix.goamd64 }}
       GORISCV64: ${{ matrix.goriscv64 }}
       CGO_ENABLED: 0
+      OIXCLOUD_DNS_AUTH_PRIVATE_KEY: ${{ secrets.OIXCLOUD_DNS_AUTH_PRIVATE_KEY }}
+      OIXCLOUD_DNS_AUTH_REQUIRE_PRIVATE_KEY: "1"
 
     steps:
       - name: Checkout codebase

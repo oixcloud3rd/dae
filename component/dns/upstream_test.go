@@ -7,6 +7,8 @@ package dns
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"errors"
 	"net/netip"
 	"net/url"
@@ -15,8 +17,77 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/daeuniverse/dae/common/consts"
 	"github.com/daeuniverse/dae/common/netutils"
+	"github.com/stretchr/testify/require"
 )
+
+func TestParseOIXCloudUpstreamSchemes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		raw       string
+		scheme    UpstreamScheme
+		port      uint16
+		path      string
+		canonical string
+	}{
+		{"oixcloud+udp://1.1.1.1", UpstreamScheme_UDP, 53, "", "oixcloud+udp://1.1.1.1:53"},
+		{"oixcloud+tcp://1.1.1.1", UpstreamScheme_TCP, 53, "", "oixcloud+tcp://1.1.1.1:53"},
+		{"oixcloud+tcp+udp://1.1.1.1", UpstreamScheme_TCP_UDP, 53, "", "oixcloud+tcp+udp://1.1.1.1:53"},
+		{"oixcloud+udp+tcp://1.1.1.1", UpstreamScheme_TCP_UDP, 53, "", "oixcloud+tcp+udp://1.1.1.1:53"},
+		{"oixcloud+tls://1.1.1.1", UpstreamScheme_TLS, 853, "", "oixcloud+tls://1.1.1.1:853"},
+		{"oixcloud+quic://1.1.1.1", UpstreamScheme_QUIC, 853, "", "oixcloud+quic://1.1.1.1:853"},
+		{"oixcloud+https://1.1.1.1/custom", UpstreamScheme_HTTPS, 443, "/custom", "oixcloud+https://1.1.1.1:443/custom"},
+		{"oixcloud+h3://1.1.1.1", UpstreamScheme_H3, 443, "/dns-query", "oixcloud+h3://1.1.1.1:443/dns-query"},
+		{"oixcloud+http3://1.1.1.1", UpstreamScheme_H3, 443, "/dns-query", "oixcloud+h3://1.1.1.1:443/dns-query"},
+	}
+	for _, test := range tests {
+		t.Run(test.raw, func(t *testing.T) {
+			raw := mustParseURL(test.raw)
+			scheme, hostname, port, path, oixCloud, err := parseRawUpstream(raw)
+			require.NoError(t, err)
+			require.True(t, oixCloud)
+			require.Equal(t, test.scheme, scheme)
+			require.Equal(t, "1.1.1.1", hostname)
+			require.Equal(t, test.port, port)
+			require.Equal(t, test.path, path)
+			upstream := &Upstream{Scheme: scheme, Hostname: hostname, Port: port, Path: path, OIXCloud: oixCloud}
+			require.Equal(t, test.canonical, upstream.String())
+		})
+	}
+}
+
+func TestParseOIXCloudUpstreamRejectsInvalidSchemes(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		"oixcloud+://1.1.1.1",
+		"oixcloud+oixcloud+udp://1.1.1.1",
+		"oixcloud+fakeip://1.1.1.1",
+		"udp://1.1.1.1?oixcloud=true",
+	} {
+		_, _, _, _, _, err := parseRawUpstream(mustParseURL(raw))
+		require.Error(t, err, raw)
+	}
+}
+
+func TestOIXCloudUpstreamRequiresEmbeddedKey(t *testing.T) {
+	originalKey := consts.OIXCloudDNSAuthPrivateKey
+	t.Cleanup(func() { consts.OIXCloudDNSAuthPrivateKey = originalKey })
+
+	resolver := &Dns{upstream: []*UpstreamResolver{{Raw: mustParseURL("oixcloud+udp://1.1.1.1:53")}}}
+	consts.OIXCloudDNSAuthPrivateKey = ""
+	require.ErrorContains(t, resolver.CheckUpstreamsFormat(), "missing oixCloud DNS auth private key")
+	consts.OIXCloudDNSAuthPrivateKey = "invalid!"
+	require.ErrorContains(t, resolver.CheckUpstreamsFormat(), "decode oixCloud DNS auth private key")
+	consts.OIXCloudDNSAuthPrivateKey = base64.StdEncoding.EncodeToString([]byte("short"))
+	require.ErrorContains(t, resolver.CheckUpstreamsFormat(), "invalid oixCloud DNS auth private key seed length")
+
+	seed := make([]byte, ed25519.SeedSize)
+	consts.OIXCloudDNSAuthPrivateKey = base64.StdEncoding.EncodeToString(seed)
+	require.NoError(t, resolver.CheckUpstreamsFormat())
+}
 
 func TestUpstreamResolverConcurrentCallsCacheSuccessfulInitialization(t *testing.T) {
 	original := newUpstreamFunc
