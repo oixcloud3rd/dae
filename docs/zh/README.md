@@ -74,51 +74,45 @@ begin; zcat /proc/config.gz || bat /boot/config "/boot/config-"(uname -r); end |
 
 > **注意**: `Armbian` 用户可以参考 [**Upgrade Guide**](../en/user-guide/kernel-upgrade.md) 升级到支持的内核。
 
-> `Arch Linux ARM` 用户可以使用支持 dae 的 [linux-aarch64-7ji](https://github.com/7Ji-PKGBUILDs/linux-aarch64-7ji) 内核。
-
 ## 安装
 
-### Arch Linux / Manjaro
-
-直接从官方仓库安装 dae 即可。
-
-除此之外，针对 AVX2 优化的最新二进制包和最新 Git 版可从 [AUR](https://aur.archlinux.org) 或 [archlinuxcn](https://github.com/archlinuxcn/repo) 获取。
-
-#### 官方仓库
+### Debian
 
 ```shell
-sudo pacman -S dae
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://apt.oixcloud3rd.akinokaede.com/gpg.key \
+  | sudo tee /etc/apt/keyrings/oixcloud3rd.asc >/dev/null
+sudo chmod 0644 /etc/apt/keyrings/oixcloud3rd.asc
+
+echo '
+Types: deb
+URIs: https://apt.oixcloud3rd.akinokaede.com/
+Suites: *
+Components: *
+Enabled: yes
+Signed-By: /etc/apt/keyrings/oixcloud3rd.asc
+' | sudo tee /etc/apt/sources.list.d/oixcloud3rd.sources >/dev/null
+
+sudo apt-get update
+sudo apt-get install dae
 ```
 
-#### AUR
-
-##### 最新稳定版 (针对 x86-64 v3 / AVX2 优化)
+### Red Hat（DNF 5）
 
 ```shell
-[yay/paru] -S dae-avx2-bin
+sudo dnf config-manager addrepo --from-repofile=https://public.oixcloud3rd.akinokaede.com/oixcloud3rd.repo
+sudo dnf install dae
 ```
 
-##### 最新 Git 版
+### Red Hat（DNF 4）
 
 ```shell
-[yay/paru] -S dae-git
+sudo dnf install -y dnf-plugins-core
+sudo dnf config-manager --add-repo https://public.oixcloud3rd.akinokaede.com/oixcloud3rd.repo
+sudo dnf install dae
 ```
 
-#### archlinuxcn
-
-##### 最新稳定版 (针对 x86-64 v3 / AVX2 优化)
-
-```shell
-sudo pacman -S dae-avx2-bin
-```
-
-##### 最新 Git 版 
-
-```shell
-sudo pacman -S dae-git
-```
-
-安装后，使用 systemctl 对服务进行控制：
+通过软件仓库安装 dae 后，使用 `systemctl` 管理服务：
 
 ```shell
 # 启动 dae
@@ -126,25 +120,6 @@ sudo systemctl start dae
 
 # 开机自动启动 dae
 sudo systemctl enable dae
-```
-
-### Gentoo Linux
-
-dae 已发布于 [gentoo-zh](https://github.com/microcai/gentoo-zh)，可以使用 `app-eselect/eselect-repository` 启用此 overlay:
-
-```shell
-eselect repository enable gentoo-zh
-emaint sync -r gentoo-zh
-emerge -a net-proxy/dae
-```
-
-### Fedora
-
-dae 已发布于 [Fedora Copr](https://copr.fedorainfracloud.org/coprs/zhullyb/v2rayA/package/dae)。
-
-```shell
-sudo dnf copr enable zhullyb/v2rayA
-sudo dnf install dae
 ```
 
 ### Alpine
@@ -157,12 +132,17 @@ sudo dnf install dae
 
 ### Docker
 
-预编译镜像可相关文档请查阅：<https://hub.docker.com/r/daeuniverse/dae>。
-
-作为替代，你也可以使用 `docker compose`:
+预编译镜像发布在 [GitHub Container Registry](https://github.com/oixcloud3rd/dae/pkgs/container/dae)：
 
 ```shell
-git clone --depth=1 https://github.com/daeuniverse/dae
+docker pull ghcr.io/oixcloud3rd/dae:latest
+```
+
+作为替代，你也可以使用 `docker compose`：
+
+```shell
+git clone --depth=1 https://github.com/oixcloud3rd/dae
+cd dae
 docker compose up -d --build
 ```
 

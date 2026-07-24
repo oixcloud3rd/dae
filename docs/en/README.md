@@ -78,79 +78,52 @@ begin; zcat /proc/config.gz || bat /boot/config "/boot/config-"(uname -r); end |
 
 > **Note**: `Armbian` users can follow the [**Upgrade Guide**](user-guide/kernel-upgrade.md) to upgrade the kernel to meet the kernel configuration requirement.
 
-> `Arch Linux ARM` users can use [linux-aarch64-7ji](https://github.com/7Ji-PKGBUILDs/linux-aarch64-7ji) which meets the kernel configuration requirement of dae.
-
 ## Installation
 
-### Arch Linux / Manjaro
-
-You can install dae directly from the official repository.
-
-Alternatively, get the latest AVX2-optimized binary package or the latest git version from [AUR](https://aur.archlinux.org) or [archlinuxcn](https://github.com/archlinuxcn/repo).
-
-#### Official Repository
+### Debian
 
 ```shell
-sudo pacman -S dae
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://apt.oixcloud3rd.akinokaede.com/gpg.key \
+  | sudo tee /etc/apt/keyrings/oixcloud3rd.asc >/dev/null
+sudo chmod 0644 /etc/apt/keyrings/oixcloud3rd.asc
+
+echo '
+Types: deb
+URIs: https://apt.oixcloud3rd.akinokaede.com/
+Suites: *
+Components: *
+Enabled: yes
+Signed-By: /etc/apt/keyrings/oixcloud3rd.asc
+' | sudo tee /etc/apt/sources.list.d/oixcloud3rd.sources >/dev/null
+
+sudo apt-get update
+sudo apt-get install dae
 ```
 
-#### AUR
-
-##### Latest Release (Optimized Binary for x86-64 v3 / AVX2)
+### Red Hat (DNF 5)
 
 ```shell
-[yay/paru] -S dae-avx2-bin
+sudo dnf config-manager addrepo --from-repofile=https://public.oixcloud3rd.akinokaede.com/oixcloud3rd.repo
+sudo dnf install dae
 ```
 
-##### Latest Git Version
+### Red Hat (DNF 4)
 
 ```shell
-[yay/paru] -S dae-git
+sudo dnf install -y dnf-plugins-core
+sudo dnf config-manager --add-repo https://public.oixcloud3rd.akinokaede.com/oixcloud3rd.repo
+sudo dnf install dae
 ```
 
-#### archlinuxcn
-
-##### Latest Release (Optimized Binary for x86-64 v3 / AVX2)
+After installing dae from a package repository, use `systemctl` to manage the service:
 
 ```shell
-sudo pacman -S dae-avx2-bin
-```
-
-##### Latest Git Version
-
-```shell
-sudo pacman -S dae-git
-```
-
-After installation, use systemctl to control it.
-
-```shell
-# start dae
+# Start dae.
 sudo systemctl start dae
 
-# auto start dae at boot
+# Start dae automatically at boot.
 sudo systemctl enable dae
-```
-
-### Gentoo Linux
-
-dae has been released on [gentoo-zh](https://github.com/microcai/gentoo-zh)
-
-use `app-eselect/eselect-repository` to enable this overlay:
-
-```shell
-eselect repository enable gentoo-zh
-emaint sync -r gentoo-zh
-emerge -a net-proxy/dae
-```
-
-### Fedora
-
-dae has been released on [Fedora Copr](https://copr.fedorainfracloud.org/coprs/zhullyb/v2rayA/package/dae).
-
-```shell
-sudo dnf copr enable zhullyb/v2rayA
-sudo dnf install dae
 ```
 
 ### Alpine
@@ -163,12 +136,17 @@ We provide a hacky way to run dae on your macOS. See [run on macOS](tutorials/ru
 
 ### Docker
 
-Pre-built image and related docs can be found at <https://hub.docker.com/r/daeuniverse/dae>.
+Pre-built images are published to the [GitHub Container Registry](https://github.com/oixcloud3rd/dae/pkgs/container/dae):
+
+```shell
+docker pull ghcr.io/oixcloud3rd/dae:latest
+```
 
 Alternatively, you can use `docker compose`:
 
 ```shell
-git clone --depth=1 https://github.com/daeuniverse/dae
+git clone --depth=1 https://github.com/oixcloud3rd/dae
+cd dae
 docker compose up -d --build
 ```
 
@@ -176,7 +154,7 @@ docker compose up -d --build
 
 > **Note**: This approach is **ONLY** recommended for `advanced` users. With this approach, users may have flexibility to test various versions of dae. Noted that newly introduced features are sometimes buggy, do it at your own risk.
 
-dae can run as a daemon (systemd) service. See [run-as-daemon](user-guide/run-as-daemon.md)
+dae can run as a daemon (systemd) service. See [run-as-daemon](user-guide/run-as-daemon.md).
 
 ### Installation Script
 
