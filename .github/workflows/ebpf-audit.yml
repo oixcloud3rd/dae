@@ -14,7 +14,7 @@ on:
       - ".github/workflows/ebpf-audit.yml"
   push:
     branches:
-      - main
+      - main-patch
       - kdae
     paths:
       - "**/*.go"
