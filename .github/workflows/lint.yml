@@ -11,7 +11,7 @@ on:
       - ".github/workflows/lint.yml"
   push:
     branches:
-      - main
+      - main-patch
       - kdae
     paths:
       - "**/*.go"

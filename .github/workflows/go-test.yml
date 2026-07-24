@@ -10,7 +10,7 @@ on:
       - "Makefile"
   push:
     branches:
-      - main
+      - main-patch
       - kdae
     paths:
       - "**/*.go"
