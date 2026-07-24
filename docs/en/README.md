@@ -91,8 +91,7 @@ begin; zcat /proc/config.gz || cat /boot/config "/boot/config-"(uname -r); end |
 
 ### Debian / Ubuntu
 
-For Debian, Ubuntu, and other APT-based distributions, use the Dae Universe
-repository at <https://daeuniverse.pages.dev>.
+For Debian, Ubuntu, and other APT-based distributions, use the oixCloud3rd repository.
 The commands below assume sudo is configured for your account.
 
 #### 1. Install curl
@@ -102,27 +101,26 @@ sudo apt update
 sudo apt install curl
 ```
 
-#### 2. Add the APT Repository
-
-Download the source configuration directly from the repository.
-Choose one of the following alternatives to match your APT version.
-
-For APT 3.0 or later:
+#### 2. Import the GPG Key
 
 ```sh
-sudo curl -fsSL -o /etc/apt/sources.list.d/daeuniverse.sources https://daeuniverse.pages.dev/daeuniverse.sources
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://apt.oixcloud3rd.akinokaede.com/gpg.key \
+  | sudo tee /etc/apt/keyrings/oixcloud3rd.asc >/dev/null
+sudo chmod 0644 /etc/apt/keyrings/oixcloud3rd.asc
 ```
 
-For APT earlier than 3.0:
+#### 3. Add the APT Repository
 
 ```sh
-sudo curl -fsSL -o /etc/apt/sources.list.d/daeuniverse.list https://daeuniverse.pages.dev/daeuniverse.list
-```
-
-#### 3. Import the GPG Key
-
-```sh
-sudo curl -fsSL -o /usr/share/keyrings/daeuniverse-archive-goose.gpg https://daeuniverse.pages.dev/daeuniverse-archive-goose.gpg
+echo '
+Types: deb
+URIs: https://apt.oixcloud3rd.akinokaede.com/
+Suites: *
+Components: *
+Enabled: yes
+Signed-By: /etc/apt/keyrings/oixcloud3rd.asc
+' | sudo tee /etc/apt/sources.list.d/oixcloud3rd.sources >/dev/null
 ```
 
 #### 4. Install dae
@@ -204,9 +202,9 @@ emerge -a net-proxy/dae
 
 ### Fedora / RHEL
 
-#### Dae Universe RPM Repository
+#### oixCloud3rd RPM Repository
 
-For Fedora and RHEL, use the Dae Universe repository at <https://daeuniverse.pages.dev>.
+For Fedora and RHEL, use the oixCloud3rd repository.
 The commands below assume sudo is configured for your account.
 
 ##### 1. Add the DNF Repository
@@ -215,8 +213,10 @@ The repository configuration file includes the GPG key address.
 DNF asks to import the key the first time it is used.
 
 ```sh
-sudo curl -fsSL -o /etc/yum.repos.d/daeuniverse.repo https://daeuniverse.pages.dev/daeuniverse.repo
+sudo dnf config-manager addrepo --from-repofile=https://public.oixcloud3rd.akinokaede.com/oixcloud3rd.repo
 ```
+
+On DNF 4, install `dnf-plugins-core` and use `dnf config-manager --add-repo` instead.
 
 ##### 2. Install dae
 
@@ -398,12 +398,16 @@ A workaround is available to run dae on macOS. See [Run on macOS](tutorials/run-
 
 ### Docker
 
-Pre-built images and documentation are available at <https://hub.docker.com/r/daeuniverse/dae>.
+Pre-built images are published to the [GitHub Container Registry](https://github.com/oixcloud3rd/dae/pkgs/container/dae):
+
+```shell
+docker pull ghcr.io/oixcloud3rd/dae:latest
+```
 
 Alternatively, use `docker compose`:
 
 ```shell
-git clone --depth=1 https://github.com/daeuniverse/dae
+git clone --depth=1 https://github.com/oixcloud3rd/dae
 cd dae
 docker compose up -d --build
 ```

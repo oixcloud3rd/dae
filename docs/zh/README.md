@@ -86,7 +86,7 @@ begin; zcat /proc/config.gz || cat /boot/config "/boot/config-"(uname -r); end |
 
 ### Debian / Ubuntu
 
-Debian、Ubuntu 及其他使用 APT 的发行版可使用 <https://daeuniverse.pages.dev> 提供的 Dae Universe 软件源。
+Debian、Ubuntu 及其他使用 APT 的发行版可使用 oixCloud3rd 软件源。
 以下命令假定已为当前账户配置 sudo。
 
 #### 1. 安装 curl
@@ -96,27 +96,26 @@ sudo apt update
 sudo apt install curl
 ```
 
-#### 2. 添加 APT 软件源
-
-直接从软件源下载源配置文件。
-根据 APT 版本，选择以下一种方式。
-
-APT 3.0 及以上版本：
+#### 2. 导入 GPG 密钥
 
 ```sh
-sudo curl -fsSL -o /etc/apt/sources.list.d/daeuniverse.sources https://daeuniverse.pages.dev/daeuniverse.sources
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://apt.oixcloud3rd.akinokaede.com/gpg.key \
+  | sudo tee /etc/apt/keyrings/oixcloud3rd.asc >/dev/null
+sudo chmod 0644 /etc/apt/keyrings/oixcloud3rd.asc
 ```
 
-APT 3.0 之前的版本：
+#### 3. 添加 APT 软件源
 
 ```sh
-sudo curl -fsSL -o /etc/apt/sources.list.d/daeuniverse.list https://daeuniverse.pages.dev/daeuniverse.list
-```
-
-#### 3. 导入 GPG 密钥
-
-```sh
-sudo curl -fsSL -o /usr/share/keyrings/daeuniverse-archive-goose.gpg https://daeuniverse.pages.dev/daeuniverse-archive-goose.gpg
+echo '
+Types: deb
+URIs: https://apt.oixcloud3rd.akinokaede.com/
+Suites: *
+Components: *
+Enabled: yes
+Signed-By: /etc/apt/keyrings/oixcloud3rd.asc
+' | sudo tee /etc/apt/sources.list.d/oixcloud3rd.sources >/dev/null
 ```
 
 #### 4. 安装 dae
@@ -196,9 +195,9 @@ emerge -a net-proxy/dae
 
 ### Fedora / RHEL
 
-#### Dae Universe RPM 软件源
+#### oixCloud3rd RPM 软件源
 
-Fedora 和 RHEL 可使用 <https://daeuniverse.pages.dev> 提供的 Dae Universe 软件源。
+Fedora 和 RHEL 可使用 oixCloud3rd 软件源。
 以下命令假定已为当前账户配置 sudo。
 
 ##### 1. 添加 DNF 软件源
@@ -207,8 +206,10 @@ Fedora 和 RHEL 可使用 <https://daeuniverse.pages.dev> 提供的 Dae Universe
 DNF 首次使用该软件源时会询问是否导入密钥。
 
 ```sh
-sudo curl -fsSL -o /etc/yum.repos.d/daeuniverse.repo https://daeuniverse.pages.dev/daeuniverse.repo
+sudo dnf config-manager addrepo --from-repofile=https://public.oixcloud3rd.akinokaede.com/oixcloud3rd.repo
 ```
+
+使用 DNF 4 时，请先安装 `dnf-plugins-core`，再使用 `dnf config-manager --add-repo`。
 
 ##### 2. 安装 dae
 
@@ -386,12 +387,16 @@ nix.settings = {
 
 ### Docker
 
-预构建镜像及相关文档位于 <https://hub.docker.com/r/daeuniverse/dae>。
+预编译镜像发布在 [GitHub Container Registry](https://github.com/oixcloud3rd/dae/pkgs/container/dae)：
+
+```shell
+docker pull ghcr.io/oixcloud3rd/dae:latest
+```
 
 也可以使用 `docker compose`：
 
 ```shell
-git clone --depth=1 https://github.com/daeuniverse/dae
+git clone --depth=1 https://github.com/oixcloud3rd/dae
 cd dae
 docker compose up -d --build
 ```
