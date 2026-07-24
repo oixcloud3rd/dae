@@ -10,7 +10,7 @@ on:
       - ".github/workflows/bpf-test.yml"
   push:
     branches:
-      - main
+      - main-patch
       - kdae
     paths:
       - "**/*.c"
