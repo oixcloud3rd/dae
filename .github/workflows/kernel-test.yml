@@ -14,7 +14,8 @@ on:
       - ".github/workflows/kernel-test.yml"
   push:
     branches:
-      - main
+      - main-patch
+      - kdae
     paths:
       - "**/*.go"
       - "**/*.c"

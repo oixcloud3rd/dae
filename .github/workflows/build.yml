@@ -14,7 +14,7 @@ name: Build (Main)
 on:
   push:
     branches:
-      - main
+      - main-patch
       - kdae
     paths:
       - "**/*.go"
