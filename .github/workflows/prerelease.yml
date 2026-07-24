@@ -12,42 +12,10 @@ jobs:
   build:
     strategy:
       matrix:
-        goos: [ linux ]
-        goarch: [ arm64, 386, riscv64, loong64, mips64, mips64le, mipsle, mips, ppc64, ppc64le, s390x ]
         include:
-          # BEGIN Linux ARM 5 6 7
-          - goos: linux
-            goarch: arm
-            goarm: 7
-          - goos: linux
-            goarch: arm
-            goarm: 6
-          - goos: linux
-            goarch: arm
-            goarm: 5
-          # END Linux ARM 5 6 7
-          # BEGIN Linux AMD64 v1 v2 v3
           - goos: linux
             goarch: amd64
             goamd64: v1
-          - goos: linux
-            goarch: amd64
-            goamd64: v2
-          - goos: linux
-            goarch: amd64
-            goamd64: v3
-          # END Linux AMD64 v1 v2 v3
-          # BEGIN Linux RISCV64 rva20u64 rva22u64 rva23u64
-          - goos: linux
-            goarch: riscv64
-            goriscv64: rva20u64
-          - goos: linux
-            goarch: riscv64
-            goriscv64: rva22u64
-          - goos: linux
-            goarch: riscv64
-            goriscv64: rva23u64
-          # END Linux RISCV64 rva20u64 rva22u64 rva23u64
       fail-fast: false
 
     runs-on: ubuntu-22.04
@@ -118,7 +86,6 @@ jobs:
         run: mkdir -p ./bundled/
 
       - name: Create full source archive
-        if: matrix.goarch == 'arm64'
         run: |
           zip -9vr ./bundled/dae-full-src.zip . -x .git/\* bundled/\*
           tar -I 'xz -9' -cvf ./bundled/dae-full-src.tar.xz --exclude .git --exclude bundled .
@@ -153,64 +120,24 @@ jobs:
           zip -9vr ../bundled/dae-$ASSET_NAME.zip .
 
       - name: Build Linux packages
-        if: ${{ env.GOARM == '7' || env.GOARM == '' }}
         run: |
-          sudo apt install -y libarchive-tools
+          sudo apt-get install -y debsigs libarchive-tools rpm
           sudo gem install fpm
+          sudo patch --forward --batch /usr/bin/debsigs < .github/patches/debsigs-gpgopts.patch
 
-          case $GOARCH in
-            'amd64' | 'i386' | 'arm64' | 'arm' | 'riscv64' | 'loong64' | 'ppc64' | 'ppc64le') archlinux_pacman='pacman' ;;
-            *) echo "Skip unsupported architecture for Arch Linux" ;;
-          esac
-
-          for pkg_mgr in deb rpm $archlinux_pacman; do
-            case $GOARCH in
-              'amd64')
-                if [ $pkg_mgr == 'deb' ]; then
-                  pkg_arch='amd64'
-                else
-                  pkg_arch='x86_64'
-                fi ;;
-              '386')
-                case $pkg_mgr in
-                  'deb') pkg_arch='i386' ;;
-                  'rpm') pkg_arch='x86' ;;
-                  'pacman') pkg_arch'i486' ;;
-                esac ;;
-              'arm64')
-                if [ $pkg_mgr == 'deb' ]; then
-                  pkg_arch='arm64'
-                else
-                  pkg_arch='aarch64'
-                fi ;;
-              'arm')
-                case $pkg_mgr in
-                  'deb') pkg_arch='armhf' ;;
-                  'rpm') pkg_arch='armhfp' ;;
-                  'pacman') pkg_arch='armv7h' ;;
-                esac ;;
-              'loong64')
-                if [ $pkg_mgr != 'rpm' ]; then
-                  pkg_arch='loong64'
-                else
-                  pkg_arch='loongarch64'
-                fi ;;
-              'mips64le') pkg_arch='mips64el' ;;
-              'mipsle') pkg_arch='mipsel' ;;
-              'ppc64le')
-                if [ $pkg_mgr == 'deb' ]; then
-                  pkg_arch='ppc64el'
-                else
-                  pkg_arch='ppc64le'
-                fi ;;
-              *) pkg_arch=$GOARCH ;;
-            esac
+          for pkg_mgr in deb rpm pacman; do
+            if [ "$pkg_mgr" = 'deb' ]; then
+              pkg_arch='amd64'
+            else
+              pkg_arch='x86_64'
+            fi
 
             fpm -s dir -t $pkg_mgr -a $pkg_arch -v ${VERSION/v/} -n dae \
-                  --url "https://github.com/daeuniverse/dae" \
+                  --url "https://github.com/oixcloud3rd/dae" \
                   --description "eBPF-based Linux high-performance transparent proxy solution" \
-                  --maintainer "daeuniverse <dae@v2raya.org>" \
-                  --license 'AGPL-3.0' \
+                  --vendor "daeuniverse" \
+                  --maintainer "oixCloud3rd <oixcloud3rd@akinokaede.com>" \
+                  --license 'AGPL-3.0-only' \
                   --package ./bundled/dae-$ASSET_NAME.$pkg_mgr \
                   --after-install ./install/package_after_install.sh \
                   --after-remove ./install/package_after_remove.sh \
@@ -221,9 +148,73 @@ jobs:
                   -C pkgdir .
           done
 
-          if [ $archlinux_pacman == 'pacman' ]; then
-            mv ./bundled/dae-$ASSET_NAME.pacman ./bundled/dae-$ASSET_NAME.pkg.tar.zst
-          fi
+          mv ./bundled/dae-$ASSET_NAME.pacman ./bundled/dae-$ASSET_NAME.pkg.tar.zst
+
+      - name: Set up package signing
+        env:
+          GPG_KEY: ${{ secrets.GPG_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          SIGNING_GNUPG_HOME="$RUNNER_TEMP/package-signing-gnupg"
+          SIGNING_PASSPHRASE_FILE="$RUNNER_TEMP/package-signing-passphrase"
+          SIGNING_PUBLIC_KEY_FILE="$RUNNER_TEMP/package-signing-public.asc"
+          mkdir -m 700 "$SIGNING_GNUPG_HOME"
+          printf '%s' "$GPG_PASSPHRASE" > "$SIGNING_PASSPHRASE_FILE"
+          chmod 600 "$SIGNING_PASSPHRASE_FILE"
+          {
+            echo "GNUPGHOME=$SIGNING_GNUPG_HOME"
+            echo "SIGNING_PASSPHRASE_FILE=$SIGNING_PASSPHRASE_FILE"
+            echo "SIGNING_PUBLIC_KEY_FILE=$SIGNING_PUBLIC_KEY_FILE"
+          } >> "$GITHUB_ENV"
+          printf '%s' "$GPG_KEY" | gpg \
+            --homedir "$SIGNING_GNUPG_HOME" \
+            --batch \
+            --pinentry-mode loopback \
+            --passphrase-file "$SIGNING_PASSPHRASE_FILE" \
+            --import
+          gpg \
+            --homedir "$SIGNING_GNUPG_HOME" \
+            --batch \
+            --armor \
+            --export "$GPG_KEY_ID" > "$SIGNING_PUBLIC_KEY_FILE"
+          cat > "$HOME/.rpmmacros" <<EOF
+          %_gpg_name $GPG_KEY_ID
+          %_gpg_sign_cmd_extra_args --batch --pinentry-mode loopback --passphrase-file $SIGNING_PASSPHRASE_FILE
+          EOF
+
+      - name: Sign Linux packages
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          set -euo pipefail
+          debsigs \
+            --sign=origin \
+            -k "$GPG_KEY_ID" \
+            --gpgopts "--batch --pinentry-mode loopback --passphrase-file $SIGNING_PASSPHRASE_FILE" \
+            ./bundled/*.deb
+          rpmsign --addsign ./bundled/*.rpm
+
+      - name: Verify Linux package signatures
+        run: |
+          set -euo pipefail
+          ar t ./bundled/*.deb | grep -qx '_gpgorigin'
+          RPM_VERIFY_DB="$RUNNER_TEMP/rpm-signature-verification"
+          mkdir -p "$RPM_VERIFY_DB"
+          rpm --dbpath "$RPM_VERIFY_DB" --initdb
+          rpm --dbpath "$RPM_VERIFY_DB" --import "$SIGNING_PUBLIC_KEY_FILE"
+          rpm --dbpath "$RPM_VERIFY_DB" --checksig ./bundled/*.rpm
+
+      - name: Publish packages
+        if: github.event_name != 'push'
+        run: |-
+          set -euo pipefail
+          for package in ./bundled/*.deb ./bundled/*.rpm; do
+            curl --fail --silent --show-error \
+              -F "package=@${package}" \
+              "https://${{ secrets.FURY_TOKEN }}@push.fury.io/oixcloud3rd/"
+          done
 
       - name: Create signature
         run: |
