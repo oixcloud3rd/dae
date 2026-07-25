@@ -224,9 +224,16 @@ resolve:
 		}
 	} else {
 		log.Debugln(err)
-		nodes = ResolveSubscriptionAsBase64(log, b)
-		if len(nodes) == 0 {
-			return "", nil, fmt.Errorf("subscription resolved to 0 nodes")
+		if nodes, err = ResolveSubscriptionAsClash(log, b); err == nil {
+			if len(nodes) == 0 {
+				return "", nil, fmt.Errorf("subscription resolved to 0 nodes")
+			}
+		} else {
+			log.Debugln(err)
+			nodes = ResolveSubscriptionAsBase64(log, b)
+			if len(nodes) == 0 {
+				return "", nil, fmt.Errorf("subscription resolved to 0 nodes")
+			}
 		}
 	}
 
