@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,12 +24,33 @@ type clashConfig struct {
 	Proxies []yaml.Node `yaml:"proxies"`
 }
 
-type clashProxy struct {
-	Name               string          `yaml:"name"`
-	Type               string          `yaml:"type"`
-	Server             string          `yaml:"server"`
-	Port               int             `yaml:"port"`
+type clashProxyHeader struct {
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
+}
+
+type clashProxyBase struct {
+	Name   string `yaml:"name"`
+	Type   string `yaml:"type"`
+	Server string `yaml:"server"`
+	Port   int    `yaml:"port"`
+	UDP    *bool  `yaml:"udp"`
+	TFO    *bool  `yaml:"tfo"`
+}
+
+type clashAnyTLSProxy struct {
+	clashProxyBase     `yaml:",inline"`
 	Password           string          `yaml:"password"`
+	SNI                string          `yaml:"sni"`
+	ServerName         string          `yaml:"server-name"`
+	SkipCertVerify     *bool           `yaml:"skip-cert-verify"`
+	ALPN               clashStringList `yaml:"alpn"`
+	ClientFingerprint  string          `yaml:"client-fingerprint"`
+	UnsupportedOptions map[string]any  `yaml:",inline"`
+}
+
+type clashSnellProxy struct {
+	clashProxyBase     `yaml:",inline"`
 	PSK                string          `yaml:"psk"`
 	Version            int             `yaml:"version"`
 	UserKey            string          `yaml:"userkey"`
@@ -39,10 +61,8 @@ type clashProxy struct {
 	SNI                string          `yaml:"sni"`
 	ServerName         string          `yaml:"server-name"`
 	SkipCertVerify     *bool           `yaml:"skip-cert-verify"`
-	ALPN               stringList      `yaml:"alpn"`
+	ALPN               clashStringList `yaml:"alpn"`
 	ClientFingerprint  string          `yaml:"client-fingerprint"`
-	UDP                *bool           `yaml:"udp"`
-	TFO                *bool           `yaml:"tfo"`
 	ObfsOpts           *clashSnellObfs `yaml:"obfs-opts"`
 	UnsupportedOptions map[string]any  `yaml:",inline"`
 }
@@ -64,11 +84,10 @@ type clashSnellObfs struct {
 	UnsupportedOptions map[string]any `yaml:",inline"`
 }
 
-// stringList accepts either a YAML scalar or sequence. Clash-compatible
-// configurations use both forms for ALPN.
-type stringList []string
+// clashStringList accepts either a YAML scalar or sequence.
+type clashStringList []string
 
-func (list *stringList) UnmarshalYAML(node *yaml.Node) error {
+func (list *clashStringList) UnmarshalYAML(node *yaml.Node) error {
 	switch node.Kind {
 	case yaml.ScalarNode:
 		if strings.TrimSpace(node.Value) == "" {
@@ -85,7 +104,7 @@ func (list *stringList) UnmarshalYAML(node *yaml.Node) error {
 		*list = values
 		return nil
 	default:
-		return errors.New("ALPN must be a string or string list")
+		return errors.New("expected a string or string list")
 	}
 }
 
@@ -99,46 +118,27 @@ func ResolveSubscriptionAsClash(log *logrus.Logger, data []byte) ([]string, erro
 		return nil, fmt.Errorf("parse Clash YAML: %w", err)
 	}
 	if config.Proxies == nil {
-		return nil, errors.New("Clash YAML does not contain proxies")
+		return nil, errors.New("clash YAML does not contain proxies")
 	}
 
 	nodes := make([]string, 0, len(config.Proxies))
 	unsupported := make(map[string]int)
 	invalid := make(map[string]int)
 	for _, proxyNode := range config.Proxies {
-		var header struct {
-			Type string `yaml:"type"`
-		}
+		var header clashProxyHeader
 		if err := proxyNode.Decode(&header); err != nil {
 			invalid["<missing>"]++
 			continue
 		}
 		proxyType := strings.ToLower(strings.TrimSpace(header.Type))
-		if proxyType != "anytls" && proxyType != "snell" {
+		if !isSupportedClashProxyType(proxyType) {
 			if proxyType == "" {
 				proxyType = "<missing>"
 			}
 			unsupported[proxyType]++
 			continue
 		}
-		var proxy clashProxy
-		if err := proxyNode.Decode(&proxy); err != nil {
-			invalid[proxyType]++
-			if log != nil && log.IsLevelEnabled(logrus.DebugLevel) {
-				log.WithError(err).Debugf("Skipping invalid Clash %s proxy", proxyType)
-			}
-			continue
-		}
-		var (
-			link string
-			err  error
-		)
-		switch proxyType {
-		case "anytls":
-			link, err = proxy.anyTLSLink()
-		case "snell":
-			link, err = proxy.snellLink()
-		}
+		link, err := convertClashProxy(proxyType, proxyNode)
 		if err != nil {
 			invalid[proxyType]++
 			if log != nil && log.IsLevelEnabled(logrus.DebugLevel) {
@@ -151,23 +151,71 @@ func ResolveSubscriptionAsClash(log *logrus.Logger, data []byte) ([]string, erro
 	logClashSkipped(log, "unsupported", unsupported)
 	logClashSkipped(log, "invalid", invalid)
 	if len(nodes) == 0 {
-		return nil, errors.New("Clash YAML contains no valid AnyTLS or Snell proxies")
+		return nil, errors.New("clash YAML contains no valid supported proxies")
 	}
 	return nodes, nil
 }
 
 // ResolveSubscriptionAsOIXCloud is kept for source compatibility.
+
 // Deprecated: use ResolveSubscriptionAsClash.
 func ResolveSubscriptionAsOIXCloud(log *logrus.Logger, data []byte) ([]string, error) {
 	return ResolveSubscriptionAsClash(log, data)
 }
 
-func (proxy clashProxy) anyTLSLink() (string, error) {
-	if err := proxy.validateBase("password"); err != nil {
+func isSupportedClashProxyType(proxyType string) bool {
+	switch proxyType {
+	case "ss", "socks5", "http", "vmess", "vless", "trojan", "hysteria2", "hy2", "tuic", "anytls", "snell":
+		return true
+	default:
+		return false
+	}
+}
+
+func convertClashProxy(proxyType string, node yaml.Node) (string, error) {
+	switch proxyType {
+	case "ss":
+		return decodeClashShadowsocks(node)
+	case "socks5":
+		return decodeClashSocks5(node)
+	case "http":
+		return decodeClashHTTP(node)
+	case "vmess":
+		return decodeClashVMess(node)
+	case "vless":
+		return decodeClashVLESS(node)
+	case "trojan":
+		return decodeClashTrojan(node)
+	case "hysteria2", "hy2":
+		return decodeClashHysteria2(node)
+	case "tuic":
+		return decodeClashTUIC(node)
+	case "anytls":
+		var proxy clashAnyTLSProxy
+		if err := node.Decode(&proxy); err != nil {
+			return "", err
+		}
+		return proxy.anyTLSLink()
+	case "snell":
+		var proxy clashSnellProxy
+		if err := node.Decode(&proxy); err != nil {
+			return "", err
+		}
+		return proxy.snellLink()
+	default:
+		return "", fmt.Errorf("unsupported Clash proxy type %q", proxyType)
+	}
+}
+
+func (proxy clashAnyTLSProxy) anyTLSLink() (string, error) {
+	if err := proxy.validateBase(); err != nil {
 		return "", err
 	}
-	if len(proxy.UnsupportedOptions) != 0 {
-		return "", fmt.Errorf("unsupported AnyTLS fields: %s", joinedMapKeys(proxy.UnsupportedOptions))
+	if proxy.Password == "" {
+		return "", errors.New("password is required")
+	}
+	if err := validateUnsupportedClashOptions(proxy.UnsupportedOptions); err != nil {
+		return "", fmt.Errorf("unsupported AnyTLS fields: %w", err)
 	}
 	if len(proxy.ALPN) != 0 {
 		return "", errors.New("per-node AnyTLS ALPN is not supported by the pinned outbound")
@@ -196,12 +244,15 @@ func (proxy clashProxy) anyTLSLink() (string, error) {
 	return u.String(), nil
 }
 
-func (proxy clashProxy) snellLink() (string, error) {
-	if err := proxy.validateBase("psk"); err != nil {
+func (proxy clashSnellProxy) snellLink() (string, error) {
+	if err := proxy.validateBase(); err != nil {
 		return "", err
 	}
-	if len(proxy.UnsupportedOptions) != 0 {
-		return "", fmt.Errorf("unsupported Snell fields: %s", joinedMapKeys(proxy.UnsupportedOptions))
+	if proxy.PSK == "" {
+		return "", errors.New("psk is required")
+	}
+	if err := validateUnsupportedClashOptions(proxy.UnsupportedOptions); err != nil {
+		return "", fmt.Errorf("unsupported Snell fields: %w", err)
 	}
 	if len(proxy.ALPN) != 0 || proxy.ClientFingerprint != "" || proxy.SNI != "" || proxy.ServerName != "" || proxy.SkipCertVerify != nil {
 		return "", errors.New("snell TLS options must be nested under obfs-opts")
@@ -248,8 +299,8 @@ func (proxy clashProxy) snellLink() (string, error) {
 }
 
 func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
-	if len(obfs.UnsupportedOptions) != 0 {
-		return fmt.Errorf("unsupported Snell obfs fields: %s", joinedMapKeys(obfs.UnsupportedOptions))
+	if err := validateUnsupportedClashOptions(obfs.UnsupportedOptions); err != nil {
+		return fmt.Errorf("unsupported Snell obfs fields: %w", err)
 	}
 	if obfs.Mode == "" {
 		return errors.New("snell obfs-opts.mode is required")
@@ -320,24 +371,80 @@ func normalizeClashClientFingerprint(fingerprint string) string {
 	}
 }
 
-func (proxy clashProxy) validateBase(credential string) error {
+func (proxy clashProxyBase) validateBase() error {
 	if strings.TrimSpace(proxy.Name) == "" || strings.TrimSpace(proxy.Server) == "" {
 		return errors.New("name and server are required")
 	}
 	if proxy.Port < 1 || proxy.Port > 65535 {
 		return errors.New("port must be between 1 and 65535")
 	}
-	switch credential {
-	case "password":
-		if proxy.Password == "" {
-			return errors.New("password is required")
-		}
-	case "psk":
-		if proxy.PSK == "" {
-			return errors.New("PSK is required")
+	return nil
+}
+
+func validateUnsupportedClashOptions(options map[string]any) error {
+	keys := make([]string, 0, len(options))
+	for key, value := range options {
+		if !isEmptyClashOption(value) {
+			keys = append(keys, key)
 		}
 	}
-	return nil
+	if len(keys) == 0 {
+		return nil
+	}
+	sort.Strings(keys)
+	return fmt.Errorf("non-empty options: %s", strings.Join(keys, ", "))
+}
+
+func isEmptyClashOption(value any) bool {
+	if value == nil {
+		return true
+	}
+	reflected := reflect.ValueOf(value)
+	for reflected.Kind() == reflect.Interface || reflected.Kind() == reflect.Pointer {
+		if reflected.IsNil() {
+			return true
+		}
+		reflected = reflected.Elem()
+	}
+	switch reflected.Kind() {
+	case reflect.Bool:
+		return !reflected.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return reflected.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return reflected.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return reflected.Float() == 0
+	case reflect.String, reflect.Slice:
+		return reflected.Len() == 0
+	case reflect.Array:
+		for i := 0; i < reflected.Len(); i++ {
+			if !isEmptyClashOption(reflected.Index(i).Interface()) {
+				return false
+			}
+		}
+		return true
+	case reflect.Map:
+		if reflected.Len() == 0 {
+			return true
+		}
+		iterator := reflected.MapRange()
+		for iterator.Next() {
+			if !isEmptyClashOption(iterator.Value().Interface()) {
+				return false
+			}
+		}
+		return true
+	case reflect.Struct:
+		for i := 0; i < reflected.NumField(); i++ {
+			if !reflected.Field(i).CanInterface() || !isEmptyClashOption(reflected.Field(i).Interface()) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 func coalesceField(name, first, second string) (string, error) {
@@ -348,15 +455,6 @@ func coalesceField(name, first, second string) (string, error) {
 		return first, nil
 	}
 	return second, nil
-}
-
-func joinedMapKeys(values map[string]any) string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return strings.Join(keys, ", ")
 }
 
 func logClashSkipped(log *logrus.Logger, reason string, counts map[string]int) {

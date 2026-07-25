@@ -31,7 +31,8 @@ global {
 # Subscriptions defined here will be resolved as nodes and merged as a part of the global node pool.
 # Support to give the subscription a tag, and filter nodes from a given subscription in the group section.
 subscription {
-    # Managed oixCloud subscriptions currently import AnyTLS and Snell nodes.
+    # Managed oixCloud subscriptions import SS, SOCKS5, HTTP(S), VMess, VLESS,
+    # Trojan, Hysteria2, TUIC, AnyTLS, and Snell nodes.
     # OIXCLOUD_SUBSCRIPTION_HMAC_KEY must be embedded when dae is built.
     oixcloud: 'oixcloud://<YOUR_TOKEN>'
 
