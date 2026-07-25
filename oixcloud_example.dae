@@ -26,10 +26,6 @@ global {
 
     # Use sniffed domains for outbound connections.
     dial_mode: domain
-
-    # Use a browser-like TLS ClientHello for oixCloud AnyTLS and Snell nodes.
-    tls_implementation: utls
-    utls_imitate: chrome_auto
 }
 
 # Subscriptions defined here will be resolved as nodes and merged as a part of the global node pool.

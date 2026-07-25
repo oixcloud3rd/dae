@@ -11,20 +11,17 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"filippo.io/age"
 	"filippo.io/age/armor"
-	outboundSnell "github.com/daeuniverse/outbound/dialer/snell"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -55,114 +52,6 @@ func TestSanitizedOIXCloudRequestErrorKeepsCauseWithoutURL(t *testing.T) {
 	require.ErrorContains(t, err, "dial timeout")
 	require.NotContains(t, err.Error(), "query-value")
 	require.NotContains(t, err.Error(), "oix-api.dler.io/path")
-}
-
-func TestResolveSubscriptionAsOIXCloud(t *testing.T) {
-	t.Parallel()
-	logger := logrus.New()
-	var logs bytes.Buffer
-	logger.SetOutput(&logs)
-	logger.SetLevel(logrus.WarnLevel)
-	yamlConfig := `
-proxies:
-  - name: anytls-node
-    type: anytls
-    server: 2001:db8::1
-    port: 443
-    password: anytls-password
-    sni: anytls.example
-    skip-cert-verify: true
-    udp: true
-    tfo: false
-  - name: snell-node
-    type: snell
-    server: snell.example
-    port: 8443
-    psk: snell-password
-    version: 4
-    reuse: true
-    identity: true
-    udp: true
-    tfo: false
-    obfs-opts:
-      mode: ech-tls
-      sni: cover.example
-      path: /ws
-      ech-config: "AAQ+DAAA"
-      skip-cert-verify: false
-  - name: ignored
-    type: vmess
-    server: ignored.example
-    port: 443
-`
-
-	nodes, err := ResolveSubscriptionAsOIXCloud(logger, []byte(yamlConfig))
-	require.NoError(t, err)
-	require.Len(t, nodes, 2)
-
-	anyTLSURL, err := url.Parse(nodes[0])
-	require.NoError(t, err)
-	require.Equal(t, "anytls", anyTLSURL.Scheme)
-	require.Equal(t, "[2001:db8::1]:443", anyTLSURL.Host)
-	require.Equal(t, "anytls-password", anyTLSURL.User.Username())
-	require.Equal(t, "anytls.example", anyTLSURL.Query().Get("sni"))
-	require.Equal(t, "1", anyTLSURL.Query().Get("insecure"))
-	require.Equal(t, "anytls-node", anyTLSURL.Fragment)
-
-	snellConfig, err := outboundSnell.ParseURL(nodes[1])
-	require.NoError(t, err)
-	require.Equal(t, "snell-node", snellConfig.Name)
-	require.Equal(t, "ech-tls", snellConfig.Obfs)
-	require.Equal(t, "/ws", snellConfig.Path)
-	require.True(t, snellConfig.Reuse)
-	require.True(t, snellConfig.Identity)
-	require.True(t, snellConfig.SkipVerifyExplicit)
-	require.False(t, snellConfig.SkipCertVerify)
-	require.Contains(t, logs.String(), "vmess=1")
-	require.NotContains(t, logs.String(), "snell-password")
-}
-
-func TestResolveSubscriptionAsOIXCloudSkipsUnsupportedOptions(t *testing.T) {
-	t.Parallel()
-	yamlConfig := `
-proxies:
-  - name: unsupported-anytls
-    type: anytls
-    server: anytls.example
-    port: 443
-    password: password
-    alpn: [h2]
-  - name: valid-snell
-    type: snell
-    server: snell.example
-    port: 443
-    psk: password
-    version: 4
-  - name: malformed-anytls
-    type: anytls
-    server: anytls.example
-    port: not-a-number
-    password: password
-`
-	nodes, err := ResolveSubscriptionAsOIXCloud(logrus.New(), []byte(yamlConfig))
-	require.NoError(t, err)
-	require.Len(t, nodes, 1)
-	require.True(t, strings.HasPrefix(nodes[0], "snell://"))
-
-	_, err = ResolveSubscriptionAsOIXCloud(logrus.New(), []byte(`proxies: [{name: bad, type: anytls, server: a, port: 443, password: p, alpn: [h2]}]`))
-	require.ErrorContains(t, err, "no valid AnyTLS or Snell")
-}
-
-func TestResolveSubscriptionAsOIXCloudSyntheticSnellFixture(t *testing.T) {
-	t.Parallel()
-	var fixture strings.Builder
-	fixture.WriteString("proxies:\n")
-	for index := 0; index < 136; index++ {
-		fmt.Fprintf(&fixture, "  - {name: 'node-%03d', type: snell, server: node-%03d.example, port: 14888, psk: fixture-password, version: 4, reuse: true, udp: true, tfo: false, identity: true, obfs-opts: {mode: ech-tls, sni: cover.example, path: /ws, ech-config: 'AAQ+DAAA', skip-cert-verify: false}}\n", index, index)
-	}
-	nodes, err := ResolveSubscriptionAsOIXCloud(logrus.New(), []byte(fixture.String()))
-	require.NoError(t, err)
-	require.Len(t, nodes, 136)
 }
 
 func TestFetchOIXCloudConfigPlainAndSigned(t *testing.T) {

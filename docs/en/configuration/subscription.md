@@ -1,6 +1,18 @@
 # Subscriptions
 
-dae resolves ordinary HTTP(S), local file, SIP008, and Base64 subscriptions as before. It also supports oixCloud managed configurations when the executable contains an `OIXCLOUD_SUBSCRIPTION_HMAC_KEY`.
+dae supports HTTP(S), local file, SIP008, Base64, and unencrypted Clash YAML
+subscriptions. Plain Clash YAML is detected by its root `proxies` list and
+currently converts `type: anytls` and `type: snell`; groups, rules, DNS
+settings, and providers are not imported. It also supports oixCloud managed
+configurations when the executable contains an
+`OIXCLOUD_SUBSCRIPTION_HMAC_KEY`.
+
+Clash Snell ECH-TLS nodes automatically use uTLS with the `chrome_auto`
+ClientHello when no TLS implementation is specified. Explicit
+`tls-implementation` and `client-fingerprint` values take precedence. Clash
+fingerprint names `chrome`, `firefox`, `safari`, `iOS`, `android`, `edge`,
+`360`, `qq`, and `random` are translated to the corresponding uTLS ClientHello
+IDs supported by outbound.
 
 ## oixCloud managed configuration
 
@@ -12,7 +24,9 @@ subscription {
 }
 ```
 
-dae authenticates the request, generates a temporary age X25519 identity, verifies a response signature when supplied, decrypts the returned YAML, and imports the root `proxies` list. This initial implementation supports only `type: anytls` and `type: snell`. Other proxy types are skipped with a summarized warning. Clash groups, rules, DNS settings, and providers are not imported.
+dae authenticates the request, generates a temporary age X25519 identity,
+verifies a response signature when supplied, decrypts the returned YAML, and
+passes it to the same Clash parser used for plain subscriptions.
 
 The token, proxy credentials, and HMAC key are redacted from subscription logs and errors.
 
