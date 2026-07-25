@@ -303,7 +303,7 @@ jobs:
 
   publish-packages:
     name: Publish packages
-    if: ${{ github.event_name != 'push' && inputs.prerelease == false }}
+    if: github.event_name != 'push'
     needs: [build]
     continue-on-error: true
     runs-on: ubuntu-latest
