@@ -12,6 +12,11 @@ on:
         type: boolean
         required: false
         default: false
+      latest_prerelease:
+        description: "Also publish the latest-prerelease tag"
+        type: boolean
+        required: false
+        default: true
   workflow_dispatch:
     inputs:
       tag:
@@ -23,17 +28,11 @@ on:
         type: boolean
         required: false
         default: false
-  push:
-    branches:
-      - main-patch
-    paths:
-      - "**/*.go"
-      - "**/*.c"
-      - "**/*.h"
-      - "go.mod"
-      - "go.sum"
-      - "Dockerfile"
-      - ".github/workflows/docker.yml"
+      latest_prerelease:
+        description: "Also publish the latest-prerelease tag"
+        type: boolean
+        required: false
+        default: true
 permissions:
   contents: read
   packages: write
@@ -69,9 +68,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
           PUBLISH_LATEST: ${{ inputs.latest }}
+          PUBLISH_LATEST_PRERELEASE: ${{ inputs.latest_prerelease }}
           REF: ${{ steps.ref.outputs.ref }}
         run: |
-          if [[ "$EVENT_NAME" == "push" || ( "$EVENT_NAME" == "workflow_dispatch" && -z "$INPUT_TAG" ) ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && -z "$INPUT_TAG" ]]; then
             date=$(git log -1 --format="%cd" --date=short | sed s/-//g)
             count=$(git rev-list --count HEAD)
             commit=$(git rev-parse --short HEAD)
@@ -84,6 +84,9 @@ jobs:
             echo "version=$version"
             echo "tags<<EOF"
             echo "${REGISTRY_IMAGE}:${version}"
+            if [[ "$PUBLISH_LATEST_PRERELEASE" == "true" ]]; then
+              echo "${REGISTRY_IMAGE}:latest-prerelease"
+            fi
             if [[ "$PUBLISH_LATEST" == "true" ]]; then
               echo "${REGISTRY_IMAGE}:latest"
             fi
