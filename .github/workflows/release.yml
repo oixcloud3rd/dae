@@ -355,4 +355,5 @@ jobs:
     with:
       tag: ${{ inputs.tag }}
       latest: ${{ !inputs.prerelease }}
+      latest_prerelease: true
     secrets: inherit
