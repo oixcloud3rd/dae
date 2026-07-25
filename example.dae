@@ -172,7 +172,8 @@ subscription {
     # It will be updated automatically once the fetch is successful.
     persist_sub: 'https-file://www.example.com/persist_sub/link'
 
-    # oixCloud managed subscriptions currently import AnyTLS and Snell proxies.
+    # Clash and oixCloud subscriptions import SS, SOCKS5, HTTP(S), VMess, VLESS,
+    # Trojan, Hysteria2, TUIC, AnyTLS, and Snell proxies.
     # OIXCLOUD_SUBSCRIPTION_HMAC_KEY must be embedded when dae is built.
     oixcloud: 'oixcloud://your-token'
 
