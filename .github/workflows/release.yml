@@ -165,6 +165,11 @@ jobs:
           sudo gem install fpm
           sudo patch --forward --batch /usr/bin/debsigs < .github/patches/debsigs-gpgopts.patch
 
+          package_version="${VERSION#v}"
+          if [[ "$package_version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)[.~-]?rc[.-]?([0-9]+)$ ]]; then
+            package_version="${BASH_REMATCH[1]}~rc${BASH_REMATCH[2]}"
+          fi
+
           pkg_managers=(deb rpm)
           case "$GOARCH" in
             amd64 | arm64 | arm | riscv64 | loong64 | ppc64 | ppc64le)
@@ -201,7 +206,7 @@ jobs:
               *) pkg_arch="$GOARCH" ;;
             esac
 
-            fpm -s dir -t $pkg_mgr -a $pkg_arch -v ${VERSION/v/} -n dae \
+            fpm -s dir -t "$pkg_mgr" -a "$pkg_arch" -v "$package_version" -n dae \
                   --url "https://github.com/oixcloud3rd/dae" \
                   --description "eBPF-based Linux high-performance transparent proxy solution" \
                   --vendor "daeuniverse" \
@@ -298,7 +303,7 @@ jobs:
 
   publish-packages:
     name: Publish packages
-    if: github.event_name != 'push'
+    if: ${{ github.event_name != 'push' && inputs.prerelease == false }}
     needs: [build]
     continue-on-error: true
     runs-on: ubuntu-latest
