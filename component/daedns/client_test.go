@@ -360,12 +360,12 @@ func TestInternalExchangeSignsOIXCloudQuestionAndRestoresResponse(t *testing.T) 
 	consts.OIXCloudDNSAuthPrivateKey = base64.StdEncoding.EncodeToString(seed)
 
 	request := new(dnsmessage.Msg)
-	request.SetQuestion("fusion_hk_1.cloud-nodes.com.", dnsmessage.TypeA)
+	request.SetQuestion("node.example.com.", dnsmessage.TypeA)
 	data, err := request.Pack()
 	if err != nil {
 		t.Fatalf("pack request: %v", err)
 	}
-	serverAddr := netip.MustParseAddrPort("203.0.113.53:1053")
+	serverAddr := netip.MustParseAddrPort("203.0.113.53:53")
 
 	for _, test := range []struct {
 		name     string

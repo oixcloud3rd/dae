@@ -280,10 +280,13 @@ dns {
             # node() is for node host resolution.
             # Example: use googledns for nodes whose names contain "hk".
             # node(name_keyword: hk) -> googledns
+            # Address matching uses the parsed proxy host, including for opaque VMess links.
+            # node(address_suffix: example.com) -> googledns
             #
             # subnode() is for subscription-derived node host resolution and is checked before node().
             # Example: nodes from "my_sub" with "hk" in the node name use alidns first.
             # subnode(subtag: my_sub, name_keyword: hk) -> alidns
+            # subnode(subtag: my_sub) && subnode(address_regex: '^hk[0-9]+\.example\.com$') -> alidns
             #
             # Catch-all forms are also supported:
             # sub() -> googledns

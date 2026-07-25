@@ -145,6 +145,10 @@ dns {
             # - sub(): 订阅拉取时的解析请求
             # - node(): 节点地址解析请求
             # - subnode(): 订阅节点的地址解析请求，并且优先级高于 node()
+            # node/subnode 的地址条件匹配解析后的代理主机名，而不是原始链接:
+            # - address_keyword: 忽略大小写的包含匹配
+            # - address_regex: 正则匹配
+            # - address_suffix: 忽略大小写、遵循 DNS 标签边界的后缀匹配
             # 这些内部选择器:
             # - 只影响 dae 自身发起的解析
             # - 目标只能是 dns.upstream 中定义的名称
@@ -166,8 +170,11 @@ dns {
             # sub(my_sub) -> googledns
             # 名称里包含 "hk" 的节点解析走 googledns。
             # node(name_keyword: hk) -> googledns
+            # 即使节点链接不透明（例如 VMess），也可按解析后的主机名后缀匹配。
+            # node(address_suffix: example.com) -> googledns
             # 来自订阅 "my_sub" 的节点优先走 alidns，再考虑 node()。
             # subnode(subtag: my_sub) -> alidns
+            # subnode(subtag: my_sub) && subnode(address_regex: '^hk[0-9]+\.example\.com$') -> alidns
 
             # fallback 意为 default。
             # 如果上面的都不匹配，使用这个 upstream。

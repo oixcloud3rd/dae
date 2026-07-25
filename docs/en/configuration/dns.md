@@ -139,6 +139,10 @@ dns {
             # - node(): node host resolution requests
             # - subnode(): node host resolution requests for subscription-derived nodes
             #   and it is checked before node()
+            # Node/subnode address keys inspect the parsed proxy hostname rather than the link:
+            # - address_keyword: case-insensitive substring
+            # - address_regex: regular expression
+            # - address_suffix: case-insensitive DNS suffix with label-boundary matching
             # Internal selectors:
             # - only affect dae's own DNS lookups
             # - must target names defined in dns.upstream
@@ -160,8 +164,11 @@ dns {
             # sub(my_sub) -> googledns
             # Route all nodes with "hk" in their name to googledns.
             # node(name_keyword: hk) -> googledns
+            # Route nodes under example.com even when their links are opaque (for example VMess).
+            # node(address_suffix: example.com) -> googledns
             # Use alidns for nodes from subscription "my_sub" before node() rules are checked.
             # subnode(subtag: my_sub) -> alidns
+            # subnode(subtag: my_sub) && subnode(address_regex: '^hk[0-9]+\.example\.com$') -> alidns
 
             # If no match, fallback to this upstream.
             fallback: asis

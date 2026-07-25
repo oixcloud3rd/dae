@@ -483,6 +483,33 @@ func compileNodeCondition(key string, values []string) (func(NodeMeta) bool, err
 		return func(meta NodeMeta) bool {
 			return matchAnyRegexp(regexps, meta.Link)
 		}, nil
+	case "address_keyword":
+		return func(meta NodeMeta) bool {
+			host := strings.ToLower(meta.AddressHost)
+			for _, value := range values {
+				if value != "" && strings.Contains(host, strings.ToLower(value)) {
+					return true
+				}
+			}
+			return false
+		}, nil
+	case "address_regex":
+		regexps, err := compileRegexps(values)
+		if err != nil {
+			return nil, err
+		}
+		return func(meta NodeMeta) bool {
+			return matchAnyRegexp(regexps, meta.AddressHost)
+		}, nil
+	case "address_suffix":
+		return func(meta NodeMeta) bool {
+			for _, value := range values {
+				if matchAddressSuffix(meta.AddressHost, value) {
+					return true
+				}
+			}
+			return false
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported key %q", key)
 	}
@@ -502,11 +529,21 @@ func compileSubNodeCondition(key string, values []string) (func(NodeMeta) bool, 
 		return func(meta NodeMeta) bool {
 			return matchAnyRegexp(regexps, meta.SubscriptionTag)
 		}, nil
-	case "name", "name_keyword", "name_regex", "link_keyword", "link_regex":
+	case "name", "name_keyword", "name_regex", "link_keyword", "link_regex",
+		"address_keyword", "address_regex", "address_suffix":
 		return compileNodeCondition(key, values)
 	default:
 		return nil, fmt.Errorf("unsupported key %q", key)
 	}
+}
+
+func matchAddressSuffix(host, suffix string) bool {
+	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	suffix = strings.ToLower(strings.Trim(strings.TrimSpace(suffix), "."))
+	if host == "" || suffix == "" {
+		return false
+	}
+	return host == suffix || strings.HasSuffix(host, "."+suffix)
 }
 
 func compileRegexps(values []string) ([]*regexp2.Regexp, error) {
