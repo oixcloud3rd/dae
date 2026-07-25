@@ -1,9 +1,15 @@
 # 订阅
 
 dae 支持 HTTP(S)、本地文件、SIP008、Base64 和未加密的 Clash YAML 订阅。
-Clash YAML 会自动识别根级 `proxies`，当前转换 `type: anytls` 和 `type: snell`；
-策略组、规则、DNS 和 provider 不会被导入。构建产物嵌入
+Clash YAML 会自动识别根级 `proxies`，导入 Shadowsocks、SOCKS5、HTTP(S)、
+VMess、VLESS、Trojan、Hysteria2、TUIC、AnyTLS 和 Snell 节点；策略组、
+规则、DNS 和 provider 不会被导入。构建产物嵌入
 `OIXCLOUD_SUBSCRIPTION_HMAC_KEY` 后，还可以读取 oixCloud 托管配置。
+
+解析器只保留对应 outbound 链接能够无损表达的选项。节点带有无法表达的
+非空传输或安全选项时会被跳过并计入汇总告警；`udp` 和 `tfo` 作为能力提示
+可被接受。普通 TLS 节点的逐节点指纹不会被静默降级，仅 VLESS Reality 和
+Snell ECH-TLS 保留 `client-fingerprint`。
 
 Clash 中的 Snell ECH-TLS 节点会在未显式指定 TLS 实现时自动使用 uTLS，
 并默认模仿 `chrome_auto` ClientHello。显式设置的

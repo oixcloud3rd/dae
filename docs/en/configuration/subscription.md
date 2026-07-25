@@ -2,10 +2,16 @@
 
 dae supports HTTP(S), local file, SIP008, Base64, and unencrypted Clash YAML
 subscriptions. Plain Clash YAML is detected by its root `proxies` list and
-currently converts `type: anytls` and `type: snell`; groups, rules, DNS
-settings, and providers are not imported. It also supports oixCloud managed
-configurations when the executable contains an
-`OIXCLOUD_SUBSCRIPTION_HMAC_KEY`.
+converts Shadowsocks, SOCKS5, HTTP(S), VMess, VLESS, Trojan, Hysteria2, TUIC,
+AnyTLS, and Snell nodes. Groups, rules, DNS settings, and providers are not
+imported. It also supports oixCloud managed configurations when the executable
+contains an `OIXCLOUD_SUBSCRIPTION_HMAC_KEY`.
+
+The parser preserves only options that the corresponding outbound link can
+represent. A proxy with non-empty unsupported transport or security options is
+skipped and included in the summarized warning; `udp` and `tfo` are accepted as
+capability hints. Ordinary per-node TLS client fingerprints are rejected rather
+than silently downgraded, except for VLESS Reality and Snell ECH-TLS.
 
 Clash Snell ECH-TLS nodes automatically use uTLS with the `chrome_auto`
 ClientHello when no TLS implementation is specified. Explicit
