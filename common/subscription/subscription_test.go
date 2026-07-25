@@ -2,11 +2,65 @@ package subscription
 
 import (
 	"encoding/base64"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sirupsen/logrus"
 )
+
+func TestResolveSubscriptionAcceptsPlainClashFile(t *testing.T) {
+	configDir := t.TempDir()
+	subscriptionDir := filepath.Join(configDir, "subscriptions")
+	if err := os.MkdirAll(subscriptionDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	clashConfig := []byte(`
+proxies:
+  - name: plain-clash-snell
+    type: snell
+    server: snell.example
+    port: 443
+    psk: password
+    version: 4
+    obfs-opts:
+      mode: ech-tls
+      path: /ws
+      ech-config: "AAQ+DAAA"
+      client-fingerprint: android
+`)
+	if err := os.WriteFile(filepath.Join(subscriptionDir, "clash.yaml"), clashConfig, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tag, nodes, err := ResolveSubscription(
+		logrus.New(),
+		&http.Client{},
+		configDir,
+		"file://subscriptions/clash.yaml",
+	)
+	if err != nil {
+		t.Fatalf("ResolveSubscription: %v", err)
+	}
+	if tag != "" {
+		t.Fatalf("unexpected tag %q", tag)
+	}
+	if len(nodes) != 1 {
+		t.Fatalf("expected one Clash node, got %d", len(nodes))
+	}
+	u, err := url.Parse(nodes[0])
+	if err != nil {
+		t.Fatalf("parse generated node: %v", err)
+	}
+	if got := u.Query().Get("tls-implementation"); got != "utls" {
+		t.Fatalf("unexpected TLS implementation %q", got)
+	}
+	if got := u.Query().Get("client-fingerprint"); got != "android_11_okhttp" {
+		t.Fatalf("unexpected client fingerprint %q", got)
+	}
+}
 
 func TestResolveSubscriptionAsSIP008_SS2022KeepsRawPSK(t *testing.T) {
 	const password = "RCF/0OOYmo6crue3LwlEyD8izLAbuUuyPic/vasJH/o="
