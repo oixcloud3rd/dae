@@ -8,7 +8,7 @@ package config
 type Desc map[string]string
 
 var SectionSummaryDesc = Desc{
-	"subscription": "Subscriptions defined here will be resolved as nodes and merged as a part of the global node pool.\nSupport to give the subscription a tag, and filter nodes from a given subscription in the group section.\nPlain Clash YAML subscriptions are detected automatically and currently import AnyTLS and Snell proxies. oixcloud:// and oixcloud+file:// fetch, verify, and decrypt managed Clash YAML.",
+	"subscription": "Subscriptions defined here will be resolved as nodes and merged as a part of the global node pool.\nSupport to give the subscription a tag, and filter nodes from a given subscription in the group section.\nPlain Clash YAML subscriptions are detected automatically and import Shadowsocks, SOCKS5, HTTP(S), VMess, VLESS, Trojan, Hysteria2, TUIC, AnyTLS, and Snell proxies. oixcloud:// and oixcloud+file:// fetch, verify, and decrypt managed Clash YAML.",
 	"node":         "Nodes defined here will be merged as a part of the global node pool.",
 	"dns":          "See more at https://github.com/daeuniverse/dae/blob/main/docs/en/configuration/dns.md.",
 	"group":        "Node group. Groups defined here can be used as outbounds in section \"routing\".",
