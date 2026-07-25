@@ -138,17 +138,20 @@ dns {
             # Do not point other LAN devices at dae:53 (loop risk).
             # You can also use user-defined upstreams.
 
-            # Available functions for ordinary DNS requests: qname, qtype.
-            # Additional internal dae selectors in the same block: sub, node, subnode.
-            # - sub(): subscription fetch requests
-            # - node(): node host resolution requests
-            # - subnode(): node host resolution requests for subscription-derived nodes
-            #   and it is checked before node()
-            # Internal selectors:
-            # - only affect dae's own DNS lookups
-            # - must target names defined in dns.upstream
-            # - do not use fallback
-            # - cannot be mixed with qname/qtype in the same rule
+            # 普通 DNS 请求可使用: qname, qtype。
+            # 同一个块里还支持 dae 自身使用的内部选择器: sub, node, subnode。
+            # - sub(): 订阅拉取时的解析请求
+            # - node(): 节点地址解析请求
+            # - subnode(): 订阅节点的地址解析请求，并且优先级高于 node()
+            # node/subnode 的地址条件匹配解析后的代理主机名，而不是原始链接:
+            # - address_keyword: 忽略大小写的包含匹配
+            # - address_regex: 正则匹配
+            # - address_suffix: 忽略大小写、遵循 DNS 标签边界的后缀匹配
+            # 这些内部选择器:
+            # - 只影响 dae 自身发起的解析
+            # - 目标只能是 dns.upstream 中定义的名称
+            # - 不使用 fallback
+            # - 不能和 qname/qtype 混写在同一条规则里
 
             # DNS request name (omit suffix dot '.').
             qname(geosite:category-ads-all) -> reject
@@ -165,8 +168,11 @@ dns {
             # sub(my_sub) -> googledns
             # Route all nodes with "hk" in their name to googledns.
             # node(name_keyword: hk) -> googledns
-            # Use alidns for nodes from subscription "my_sub" before node() rules are checked.
+            # 即使节点链接不透明（例如 VMess），也可按解析后的主机名后缀匹配。
+            # node(address_suffix: example.com) -> googledns
+            # 来自订阅 "my_sub" 的节点优先走 alidns，再考虑 node()。
             # subnode(subtag: my_sub) -> alidns
+            # subnode(subtag: my_sub) && subnode(address_regex: '^hk[0-9]+\.example\.com$') -> alidns
 
             # If no match, fallback to this upstream.
             fallback: asis
