@@ -26,6 +26,17 @@ CFLAGS := -DMAX_MATCH_SET_LEN=$(MAX_MATCH_SET_LEN) $(CFLAGS)
 DEFAULT_GOEXPERIMENT := heapminimum512kib,randomizedheapbase64
 GOEXPERIMENT_MERGED := $(shell printf '%s\n' "$(DEFAULT_GOEXPERIMENT),$(GOEXPERIMENT)" | tr ',' '\n' | sed '/^$$/d' | awk '!seen[$$0]++' | paste -sd, -)
 export GOEXPERIMENT := $(GOEXPERIMENT_MERGED)
+# Host-side helper programs must not inherit target runtime experiments. In
+# particular, an older bootstrap cmd/go may need to select a newer toolchain
+# before it can parse those experiments.
+GO ?= go
+HOST_GO_ENV := env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 -u GOEXPERIMENT -u GOFIPS140
+GO_TOOL := $(shell $(HOST_GO_ENV) $(GO) env GOROOT)/bin/go
+# Resolve the module-selected toolchain once without experiments, then invoke
+# it directly. This prevents every make subtarget from re-entering bootstrap
+# toolchain selection with target-only GOEXPERIMENT values in its environment.
+TARGET_GO := env GOTOOLCHAIN=local $(GO_TOOL)
+HOST_GO := $(HOST_GO_ENV) GOTOOLCHAIN=local CGO_ENABLED=0 $(GO_TOOL)
 NOSTRIP ?= n
 STRIP_PATH := $(shell command -v $(STRIP) 2>/dev/null)
 BUILD_TAGS_FILE := .build_tags
@@ -37,7 +48,7 @@ else
 	STRIP_FLAG := -strip=$(STRIP_PATH)
 endif
 
-GOARCH ?= $(shell go env GOARCH)
+GOARCH ?= $(shell $(HOST_GO) env GOARCH)
 
 # Do NOT remove the line below. This line is for CI.
 #export GOMODCACHE=$(PWD)/go-mod
@@ -69,14 +80,14 @@ dae: export CGO_ENABLED=0
 endif
 dae: validate-oixcloud-dns-auth-private-key validate-oixcloud-subscription-hmac-key ebpf
 	@echo $(CFLAGS)
-	@go build -tags=$(shell cat $(BUILD_TAGS_FILE)) -o $(OUTPUT) $(BUILD_ARGS) .
+	@$(TARGET_GO) build -tags=$(shell cat $(BUILD_TAGS_FILE)) -o $(OUTPUT) $(BUILD_ARGS) .
 ## End Dae Build
 
 validate-oixcloud-dns-auth-private-key:
-	@env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 CGO_ENABLED=0 go run ./cmd/internal/check_oixcloud_dns_auth_key
+	@$(HOST_GO) run ./cmd/internal/check_oixcloud_dns_auth_key
 
 validate-oixcloud-subscription-hmac-key:
-	@env -u GOOS -u GOARCH -u GOARM -u GOAMD64 -u GORISCV64 CGO_ENABLED=0 go run ./cmd/internal/check_oixcloud_subscription_hmac_key
+	@$(HOST_GO) run ./cmd/internal/check_oixcloud_subscription_hmac_key
 
 ## Begin Git Submodules
 .gitmodules.d.mk: .gitmodules
@@ -109,14 +120,14 @@ clean-ebpf:
 	@rm -f control/kern/tests/bpftest_bpf*.go && \
 			rm -f control/kern/tests/bpftest_bpf*.o
 fmt:
-	go fmt ./...
+	$(TARGET_GO) fmt ./...
 
 ebpf-sync:
 	@unset GOOS && \
 	unset GOARCH && \
 	unset GOARM && \
 	unset GOAMD64 && \
-	go generate ./common/consts/ebpf.go
+	$(TARGET_GO) generate ./common/consts/ebpf.go
 
 ebpf-sync-check: ebpf-sync
 	git diff --exit-code -- common/consts/ebpf_generated.go control/kern/ebpf_sync_defs.h
@@ -132,8 +143,8 @@ ebpf: ebpf-sync submodule clean-ebpf
     unset GOARCH && \
     unset GOARM && \
     echo $(STRIP_FLAG) && \
-    go generate ./control/control.go && \
-    if go generate ./trace/trace.go; then \
+    $(TARGET_GO) generate ./control/control.go && \
+	if $(TARGET_GO) generate ./trace/trace.go; then \
 		echo trace > $(BUILD_TAGS_FILE); \
 	else \
 		echo > $(BUILD_TAGS_FILE); \
@@ -152,10 +163,10 @@ ebpf-test: ebpf-sync submodule clean-ebpf
     unset GOARCH && \
     unset GOARM && \
     echo $(STRIP_FLAG) && \
-    go generate ./control/bpf_bug_verification_test.go && \
-    go generate ./control/kern/tests/bpf_test.go && \
-    go clean -testcache && \
-    go test -v -tags dae_bpf_tests ./control/kern/tests/...
+    $(TARGET_GO) generate ./control/bpf_bug_verification_test.go && \
+    $(TARGET_GO) generate ./control/kern/tests/bpf_test.go && \
+    $(TARGET_GO) clean -testcache && \
+    $(TARGET_GO) test -v -tags dae_bpf_tests ./control/kern/tests/...
 
 ebpf-test-tagged: export BPF_CLANG := $(CLANG)
 ebpf-test-tagged: export BPF_STRIP_FLAG := $(STRIP_FLAG)
@@ -167,10 +178,10 @@ ebpf-test-tagged: ebpf-sync submodule clean-ebpf
     unset GOARCH && \
     unset GOARM && \
     echo $(STRIP_FLAG) && \
-    go generate ./control/bpf_bug_verification_test.go && \
-    go generate ./control/kern/tests/bpf_test.go && \
-    go clean -testcache && \
-    go test -v -tags dae_bpf_tests ./control/kern/tests/...
+    $(TARGET_GO) generate ./control/bpf_bug_verification_test.go && \
+    $(TARGET_GO) generate ./control/kern/tests/bpf_test.go && \
+    $(TARGET_GO) clean -testcache && \
+    $(TARGET_GO) test -v -tags dae_bpf_tests ./control/kern/tests/...
 
 ebpf-test-debug: export BPF_CLANG := $(CLANG)
 ebpf-test-debug: export BPF_STRIP_FLAG := $(STRIP_FLAG)
@@ -182,10 +193,10 @@ ebpf-test-debug: ebpf-sync submodule clean-ebpf
     unset GOARCH && \
     unset GOARM && \
     echo $(STRIP_FLAG) && \
-    go generate ./control/bpf_bug_verification_test.go && \
-    go generate ./control/kern/tests/bpf_test.go && \
-    go clean -testcache && \
-    go test -v -tags dae_bpf_tests ./control/kern/tests/...
+    $(TARGET_GO) generate ./control/bpf_bug_verification_test.go && \
+    $(TARGET_GO) generate ./control/kern/tests/bpf_test.go && \
+    $(TARGET_GO) clean -testcache && \
+    $(TARGET_GO) test -v -tags dae_bpf_tests ./control/kern/tests/...
 
 ebpf-test-debug-tagged: export BPF_CLANG := $(CLANG)
 ebpf-test-debug-tagged: export BPF_STRIP_FLAG := $(STRIP_FLAG)
@@ -197,10 +208,10 @@ ebpf-test-debug-tagged: ebpf-sync submodule clean-ebpf
     unset GOARCH && \
     unset GOARM && \
     echo $(STRIP_FLAG) && \
-    go generate ./control/bpf_bug_verification_test.go && \
-    go generate ./control/kern/tests/bpf_test.go && \
-    go clean -testcache && \
-    go test -v -tags dae_bpf_tests ./control/kern/tests/...
+    $(TARGET_GO) generate ./control/bpf_bug_verification_test.go && \
+    $(TARGET_GO) generate ./control/kern/tests/bpf_test.go && \
+    $(TARGET_GO) clean -testcache && \
+    $(TARGET_GO) test -v -tags dae_bpf_tests ./control/kern/tests/...
 
 ebpf-audit:
 	./scripts/ebpf-audit.sh
