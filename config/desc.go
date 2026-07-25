@@ -73,6 +73,7 @@ Additional internal dae selectors are available in the same request block:
 sub matches subscription fetch requests.
 node matches node host resolution requests.
 subnode matches host resolution for nodes that came from a subscription, and is checked before node.
+Node and subnode address matching uses the parsed proxy hostname. Supported address keys are address_keyword, address_regex, and address_suffix.
 Internal selectors only affect dae's own requests, must point to names defined in dns.upstream, do not use fallback, and cannot be mixed with qname/qtype in the same rule.`,
 	"response": `DNS responses will follow this routing.
 Built-in outbound: accept, reject.

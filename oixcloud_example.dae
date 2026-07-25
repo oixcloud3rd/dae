@@ -58,7 +58,7 @@ dns {
     routing {
         request {
             # Resolve cloud-nodes.com and its subdomains through oixCloud DNS.
-            subnode(oixcloud) && subnode(link_regex: '@(?:[^/]*\.)?cloud-nodes\.com:') -> oixclouddns
+            subnode(oixcloud) && subnode(address_suffix: cloud-nodes.com) -> oixclouddns
 
             qname(geosite:cn) -> alidns
             fallback: googledns
