@@ -231,5 +231,10 @@ resolve:
 	} else {
 		log.Debugln(err)
 	}
+	if nodes, err = ResolveSubscriptionAsClash(log, b); err == nil {
+		return tag, nodes, nil
+	} else {
+		log.Debugln(err)
+	}
 	return tag, ResolveSubscriptionAsBase64(log, b), nil
 }

@@ -165,6 +165,7 @@ subscription {
     another_sub: 'https://example.com/another_sub'
     'https://example.com/no_tag_link'
     'file://relative/path/to/mysub.sub' # Put subscription content in /etc/dae/relative/path/to/mysub.sub
+    # Plain Clash YAML from HTTP(S) or file subscriptions is detected automatically.
 
     # Subscriptions with '-file' will be saved to 'config_dir/persist.d/your_sub_tag.sub'.
     # This file will serve as a fallback when fetching the subscription via a link fails.
