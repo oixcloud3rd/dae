@@ -259,7 +259,7 @@ func (proxy clashSnellProxy) snellLink() (string, error) {
 	}
 	isECHTLS := proxy.ObfsOpts != nil && strings.EqualFold(proxy.ObfsOpts.Mode, "ech-tls")
 	if len(proxy.ALPN) != 0 && (!isECHTLS || len(proxy.ALPN) != 1 || proxy.ALPN[0] != "h2") {
-		return "", errors.New("Snell ECH-TLS ALPN is fixed to h2")
+		return "", errors.New("snell ECH-TLS ALPN is fixed to h2")
 	}
 	if proxy.ClientFingerprint != "" || proxy.SNI != "" || proxy.ServerName != "" || proxy.SkipCertVerify != nil {
 		return "", errors.New("snell TLS options must be nested under obfs-opts")
@@ -314,7 +314,7 @@ func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
 	}
 	isECHTLS := strings.EqualFold(obfs.Mode, "ech-tls")
 	if !isECHTLS && (obfs.WSHost != "" || obfs.Path != "") {
-		return errors.New("Snell WebSocket options are only accepted as ignored legacy ECH-TLS fields")
+		return errors.New("snell WebSocket options are only accepted as ignored legacy ECH-TLS fields")
 	}
 	query.Set("obfs", obfs.Mode)
 	if obfs.Host != "" {
