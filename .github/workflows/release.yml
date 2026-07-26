@@ -55,7 +55,7 @@ jobs:
           # END Linux RISCV64 rva20u64 rva22u64 rva23u64
       fail-fast: false
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     env:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
@@ -163,7 +163,6 @@ jobs:
           set -euo pipefail
           sudo apt-get install -y debsigs libarchive-tools rpm
           sudo gem install fpm
-          sudo patch --forward --batch /usr/bin/debsigs < .github/patches/debsigs-gpgopts.patch
 
           package_version="${VERSION#v}"
           if [[ "$package_version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)[.~-]?(rc|beta|alpha)[.-]?([0-9]+)$ ]]; then
