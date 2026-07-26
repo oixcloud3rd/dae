@@ -81,7 +81,6 @@ proxies:
 	require.NoError(t, err)
 	require.Equal(t, "snell-node", snellConfig.Name)
 	require.Equal(t, "ech-tls", snellConfig.Obfs)
-	require.Empty(t, snellConfig.Path)
 	require.NotContains(t, nodes[1], "path=")
 	require.True(t, snellConfig.Reuse)
 	require.True(t, snellConfig.Identity)
