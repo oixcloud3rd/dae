@@ -75,13 +75,16 @@ type clashSnellObfs struct {
 	// The following ECH-TLS transport options are oixCloud-specific Clash
 	// extensions, not fields from standard Clash Snell.
 	SNI                string         `yaml:"sni"`
-	WSHost             string         `yaml:"ws-host"`
-	Path               string         `yaml:"path"`
 	ECHConfig          string         `yaml:"ech-config"`
 	SkipCertVerify     *bool          `yaml:"skip-cert-verify"`
 	TLSImplementation  string         `yaml:"tls-implementation"`
 	ClientFingerprint  string         `yaml:"client-fingerprint"`
 	UnsupportedOptions map[string]any `yaml:",inline"`
+
+	// Deprecated: raw ECH-TLS ignores WebSocket transport options.
+	WSHost string `yaml:"ws-host"`
+	// Deprecated: raw ECH-TLS ignores WebSocket transport options.
+	Path string `yaml:"path"`
 }
 
 // clashStringList accepts either a YAML scalar or sequence.
@@ -254,7 +257,11 @@ func (proxy clashSnellProxy) snellLink() (string, error) {
 	if err := validateUnsupportedClashOptions(proxy.UnsupportedOptions); err != nil {
 		return "", fmt.Errorf("unsupported Snell fields: %w", err)
 	}
-	if len(proxy.ALPN) != 0 || proxy.ClientFingerprint != "" || proxy.SNI != "" || proxy.ServerName != "" || proxy.SkipCertVerify != nil {
+	isECHTLS := proxy.ObfsOpts != nil && strings.EqualFold(proxy.ObfsOpts.Mode, "ech-tls")
+	if len(proxy.ALPN) != 0 && (!isECHTLS || len(proxy.ALPN) != 1 || proxy.ALPN[0] != "h2") {
+		return "", errors.New("Snell ECH-TLS ALPN is fixed to h2")
+	}
+	if proxy.ClientFingerprint != "" || proxy.SNI != "" || proxy.ServerName != "" || proxy.SkipCertVerify != nil {
 		return "", errors.New("snell TLS options must be nested under obfs-opts")
 	}
 	userKey, err := coalesceField("user key", proxy.UserKey, proxy.UserKeyDashed)
@@ -305,18 +312,16 @@ func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
 	if obfs.Mode == "" {
 		return errors.New("snell obfs-opts.mode is required")
 	}
+	isECHTLS := strings.EqualFold(obfs.Mode, "ech-tls")
+	if !isECHTLS && (obfs.WSHost != "" || obfs.Path != "") {
+		return errors.New("Snell WebSocket options are only accepted as ignored legacy ECH-TLS fields")
+	}
 	query.Set("obfs", obfs.Mode)
 	if obfs.Host != "" {
 		query.Set("obfs-host", obfs.Host)
 	}
 	if obfs.SNI != "" {
 		query.Set("sni", obfs.SNI)
-	}
-	if obfs.WSHost != "" {
-		query.Set("ws-host", obfs.WSHost)
-	}
-	if obfs.Path != "" {
-		query.Set("path", obfs.Path)
 	}
 	if obfs.ECHConfig != "" {
 		query.Set("ech-config", obfs.ECHConfig)
@@ -326,7 +331,7 @@ func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
 	}
 	tlsImplementation := obfs.TLSImplementation
 	clientFingerprint := normalizeClashClientFingerprint(obfs.ClientFingerprint)
-	if strings.EqualFold(obfs.Mode, "ech-tls") {
+	if isECHTLS {
 		if tlsImplementation == "" {
 			tlsImplementation = "utls"
 		}

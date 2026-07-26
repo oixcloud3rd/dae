@@ -17,6 +17,11 @@ Clash 中的 Snell ECH-TLS 节点会在未显式指定 TLS 实现时自动使用
 `chrome`、`firefox`、`safari`、`iOS`、`android`、`edge`、`360`、`qq` 和
 `random` 会自动转换为 outbound 支持的 uTLS ClientHello ID。
 
+Snell ECH-TLS 使用 TLS 握手后的原始字节流，不再使用 WebSocket。ALPN 固定
+为 `h2`，但应用数据不是 HTTP/2 帧。旧配置中的 `path` 和 `ws-host` 会被接受
+但忽略，生成的规范化节点链接不会保留这些字段。显式 `alpn: [h2]` 可以省略；
+其他 ALPN 值会被拒绝。
+
 ## oixCloud 托管配置
 
 将 oixCloud token 放在 URL host 中；query 参数会转发给托管配置 API：
