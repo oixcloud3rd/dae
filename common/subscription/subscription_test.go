@@ -60,6 +60,9 @@ proxies:
 	if got := u.Query().Get("client-fingerprint"); got != "android_11_okhttp" {
 		t.Fatalf("unexpected client fingerprint %q", got)
 	}
+	if got := u.Query().Get("path"); got != "" {
+		t.Fatalf("legacy ECH-TLS path was not removed: %q", got)
+	}
 }
 
 func TestResolveSubscriptionAsSIP008_SS2022KeepsRawPSK(t *testing.T) {

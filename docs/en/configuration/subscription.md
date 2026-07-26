@@ -20,6 +20,12 @@ fingerprint names `chrome`, `firefox`, `safari`, `iOS`, `android`, `edge`,
 `360`, `qq`, and `random` are translated to the corresponding uTLS ClientHello
 IDs supported by outbound.
 
+Snell ECH-TLS uses the raw byte stream after the TLS handshake and no longer
+uses WebSocket framing. Its ALPN is fixed to `h2`, although the application data
+is not HTTP/2. Legacy `path` and `ws-host` values are accepted but ignored and
+are removed from canonical node links. An explicit `alpn: [h2]` is redundant
+but accepted; other ALPN values are rejected.
+
 ## oixCloud managed configuration
 
 Use the oixCloud token as the URL host. Query parameters are forwarded to the managed configuration API:
