@@ -70,9 +70,9 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
-	github.com/sagernet/sing v0.8.12-0.20260702081104-2ded2af32d3d // indirect
+	github.com/sagernet/sing v0.8.12-0.20260727003324-d096a164bc7f // indirect
 	github.com/sagernet/sing-shadowtls v0.2.0 // indirect
-	github.com/sagernet/sing-snell v0.0.0-20260724130459-8c230479c67c // indirect
+	github.com/sagernet/sing-snell v0.0.0-20260727102834-1cb49a5bae3f // indirect
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/samber/oops v1.21.0 // indirect
 	github.com/sorairolake/lzip-go v0.3.8 // indirect
@@ -124,4 +124,4 @@ replace github.com/olicesx/quic-go => github.com/olicesx/quic-go v0.0.0-20260428
 // Use the pushed perf/complete-optimizations fork head with QUIC window tuning + upstream cherry-picks.
 replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260726195624-f31924f89fd0
 
-replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260724130459-8c230479c67c
+replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260727102834-1cb49a5bae3f
