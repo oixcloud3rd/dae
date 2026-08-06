@@ -60,6 +60,18 @@ proxies:
 	if got := u.Query().Get("client-fingerprint"); got != "android_11_okhttp" {
 		t.Fatalf("unexpected client fingerprint %q", got)
 	}
+	if got := u.Query().Get("alpn"); got != "snell-ech/1" {
+		t.Fatalf("unexpected Snell ECH-TLS ALPN %q", got)
+	}
+	if got := u.Query().Get("identity"); got != "2" {
+		t.Fatalf("unexpected Snell identity version %q", got)
+	}
+	if got := u.Query().Get("skip-cert-verify"); got != "false" {
+		t.Fatalf("certificate verification was not made explicit: %q", got)
+	}
+	if got := u.Query().Get("preconnect"); got != "0" {
+		t.Fatalf("unexpected Snell preconnect value %q", got)
+	}
 	if got := u.Query().Get("path"); got != "" {
 		t.Fatalf("legacy ECH-TLS path was not removed: %q", got)
 	}
