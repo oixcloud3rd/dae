@@ -73,7 +73,7 @@ require (
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/sagernet/sing v0.8.12-0.20260727003324-d096a164bc7f // indirect
 	github.com/sagernet/sing-shadowtls v0.2.0 // indirect
-	github.com/sagernet/sing-snell v0.0.0-20260806050542-54ec3d09fd26 // indirect
+	github.com/sagernet/sing-snell v0.0.0-20260806061941-924f2fe9981d // indirect
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/samber/oops v1.21.0 // indirect
 	github.com/sorairolake/lzip-go v0.3.8 // indirect
@@ -122,6 +122,6 @@ replace github.com/olicesx/quic-go => github.com/olicesx/quic-go v0.0.0-20260428
 //replace github.com/daeuniverse/dae-config-dist/go/dae_config => /home/mzz/antlrProjects/dae-config/build/go/dae_config
 
 // Use the pushed perf/complete-optimizations fork head with QUIC window tuning + upstream cherry-picks.
-replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260806061520-6605d3aea561
+replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260806063604-4bedeab74690
 
-replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260806050542-54ec3d09fd26
+replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260806061941-924f2fe9981d
