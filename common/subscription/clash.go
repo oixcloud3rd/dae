@@ -75,8 +75,14 @@ type clashSnellObfs struct {
 	// The following ECH-TLS transport options are oixCloud-specific Clash
 	// extensions, not fields from standard Clash Snell.
 	SNI                string         `yaml:"sni"`
+	ALPN               string         `yaml:"alpn"`
+	Protocol           string         `yaml:"protocol"`
+	IdentityVersion    *int           `yaml:"identity-version"`
+	LegacyFallback     *bool          `yaml:"legacy-fallback"`
+	Preconnect         *int           `yaml:"preconnect"`
 	ECHConfig          string         `yaml:"ech-config"`
 	SkipCertVerify     *bool          `yaml:"skip-cert-verify"`
+	Insecure           *bool          `yaml:"insecure"`
 	TLSImplementation  string         `yaml:"tls-implementation"`
 	ClientFingerprint  string         `yaml:"client-fingerprint"`
 	UnsupportedOptions map[string]any `yaml:",inline"`
@@ -258,8 +264,8 @@ func (proxy clashSnellProxy) snellLink() (string, error) {
 		return "", fmt.Errorf("unsupported Snell fields: %w", err)
 	}
 	isECHTLS := proxy.ObfsOpts != nil && strings.EqualFold(proxy.ObfsOpts.Mode, "ech-tls")
-	if len(proxy.ALPN) != 0 && (!isECHTLS || len(proxy.ALPN) != 1 || proxy.ALPN[0] != "h2") {
-		return "", errors.New("snell ECH-TLS ALPN is fixed to h2")
+	if len(proxy.ALPN) != 0 && !isECHTLS {
+		return "", errors.New("snell ALPN requires ECH-TLS")
 	}
 	if proxy.ClientFingerprint != "" || proxy.SNI != "" || proxy.ServerName != "" || proxy.SkipCertVerify != nil {
 		return "", errors.New("snell TLS options must be nested under obfs-opts")
@@ -286,14 +292,14 @@ func (proxy clashSnellProxy) snellLink() (string, error) {
 	if proxy.Reuse != nil {
 		query.Set("reuse", strconv.FormatBool(*proxy.Reuse))
 	}
-	if proxy.Identity != nil {
+	if proxy.Identity != nil && !isECHTLS {
 		query.Set("identity", strconv.FormatBool(*proxy.Identity))
 	}
 	if proxy.Mode != "" {
 		query.Set("mode", proxy.Mode)
 	}
 	if proxy.ObfsOpts != nil {
-		if err := addSnellObfsQuery(query, proxy.ObfsOpts); err != nil {
+		if err := addSnellObfsQuery(query, proxy.ObfsOpts, proxy.ALPN, proxy.Identity, proxy.Reuse); err != nil {
 			return "", err
 		}
 	}
@@ -302,10 +308,29 @@ func (proxy clashSnellProxy) snellLink() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return configuration.ExportToURL(), nil
+	canonical := configuration.ExportToURL()
+	if isECHTLS {
+		// Keep preconnect explicit on Clash-derived links. Direct share links
+		// retain outbound's historical implicit defaults.
+		canonicalURL, parseErr := url.Parse(canonical)
+		if parseErr != nil {
+			return "", parseErr
+		}
+		canonicalQuery := canonicalURL.Query()
+		canonicalQuery.Set("preconnect", strconv.Itoa(configuration.Preconnect))
+		canonicalURL.RawQuery = canonicalQuery.Encode()
+		canonical = canonicalURL.String()
+	}
+	return canonical, nil
 }
 
-func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
+func addSnellObfsQuery(
+	query url.Values,
+	obfs *clashSnellObfs,
+	topLevelALPN clashStringList,
+	topLevelIdentity *bool,
+	reuse *bool,
+) error {
 	if err := validateUnsupportedClashOptions(obfs.UnsupportedOptions); err != nil {
 		return fmt.Errorf("unsupported Snell obfs fields: %w", err)
 	}
@@ -316,9 +341,53 @@ func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
 	if !isECHTLS && (obfs.WSHost != "" || obfs.Path != "") {
 		return errors.New("snell WebSocket options are only accepted as ignored legacy ECH-TLS fields")
 	}
+	if !isECHTLS && (len(topLevelALPN) != 0 || obfs.ALPN != "" || obfs.Protocol != "" ||
+		obfs.IdentityVersion != nil || obfs.LegacyFallback != nil || obfs.Preconnect != nil ||
+		obfs.SNI != "" || obfs.ECHConfig != "" || obfs.SkipCertVerify != nil || obfs.Insecure != nil ||
+		obfs.TLSImplementation != "" || obfs.ClientFingerprint != "") {
+		return errors.New("snell ECH-TLS options require obfs-opts.mode=ech-tls")
+	}
 	query.Set("obfs", obfs.Mode)
 	if obfs.Host != "" {
 		query.Set("obfs-host", obfs.Host)
+	}
+	if !isECHTLS {
+		return nil
+	}
+
+	alpn, legacyFallback, err := resolveClashSnellECHTLSALPN(
+		topLevelALPN,
+		obfs.ALPN,
+		obfs.Protocol,
+		obfs.LegacyFallback,
+	)
+	if err != nil {
+		return err
+	}
+	identityVersion, err := resolveClashSnellIdentity(topLevelIdentity, obfs.IdentityVersion)
+	if err != nil {
+		return err
+	}
+	preconnect := 0
+	if obfs.Preconnect != nil {
+		preconnect = *obfs.Preconnect
+	}
+	if preconnect < 0 || preconnect > 4 {
+		return errors.New("snell ECH-TLS preconnect must be between 0 and 4")
+	}
+	if preconnect > 0 && (reuse == nil || !*reuse) {
+		return errors.New("snell ECH-TLS preconnect requires reuse=true")
+	}
+	if obfs.SkipCertVerify != nil && *obfs.SkipCertVerify || obfs.Insecure != nil && *obfs.Insecure {
+		return errors.New("snell ECH-TLS requires certificate verification")
+	}
+
+	query.Set("alpn", alpn)
+	query.Set("identity-version", strconv.Itoa(identityVersion))
+	query.Set("preconnect", strconv.Itoa(preconnect))
+	query.Set("skip-cert-verify", "false")
+	if legacyFallback {
+		query.Set("legacy-fallback", "true")
 	}
 	if obfs.SNI != "" {
 		query.Set("sni", obfs.SNI)
@@ -326,18 +395,13 @@ func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
 	if obfs.ECHConfig != "" {
 		query.Set("ech-config", obfs.ECHConfig)
 	}
-	if obfs.SkipCertVerify != nil {
-		query.Set("skip-cert-verify", strconv.FormatBool(*obfs.SkipCertVerify))
-	}
 	tlsImplementation := obfs.TLSImplementation
 	clientFingerprint := normalizeClashClientFingerprint(obfs.ClientFingerprint)
-	if isECHTLS {
-		if tlsImplementation == "" {
-			tlsImplementation = "utls"
-		}
-		if tlsImplementation == "utls" && clientFingerprint == "" {
-			clientFingerprint = "chrome_auto"
-		}
+	if tlsImplementation == "" {
+		tlsImplementation = "utls"
+	}
+	if tlsImplementation == "utls" && clientFingerprint == "" {
+		clientFingerprint = "chrome_auto"
 	}
 	if tlsImplementation != "" {
 		query.Set("tls-implementation", tlsImplementation)
@@ -346,6 +410,100 @@ func addSnellObfsQuery(query url.Values, obfs *clashSnellObfs) error {
 		query.Set("client-fingerprint", clientFingerprint)
 	}
 	return nil
+}
+
+func resolveClashSnellIdentity(topLevel *bool, nested *int) (int, error) {
+	identityVersion := 2
+	if topLevel != nil {
+		identityVersion = 0
+		if *topLevel {
+			identityVersion = 1
+		}
+	}
+	if nested != nil {
+		if *nested < 0 || *nested > 2 {
+			return 0, errors.New("snell ECH-TLS identity-version must be between 0 and 2")
+		}
+		if topLevel != nil && identityVersion != *nested {
+			return 0, errors.New("snell identity and identity-version values conflict")
+		}
+		identityVersion = *nested
+	}
+	return identityVersion, nil
+}
+
+func resolveClashSnellECHTLSALPN(
+	topLevel clashStringList,
+	nestedALPN string,
+	nestedProtocol string,
+	nestedLegacyFallback *bool,
+) (string, bool, error) {
+	if len(topLevel) > 1 {
+		return "", false, errors.New("snell ECH-TLS requires a single top-level ALPN")
+	}
+	normalizedALPN, err := normalizeClashSnellECHTLSALPN(nestedALPN)
+	if err != nil {
+		return "", false, err
+	}
+	normalizedProtocol, err := normalizeClashSnellECHTLSALPN(nestedProtocol)
+	if err != nil {
+		return "", false, err
+	}
+	if normalizedALPN != "" && normalizedProtocol != "" && normalizedALPN != normalizedProtocol {
+		return "", false, errors.New("snell ECH-TLS alpn and protocol values conflict")
+	}
+	nested := normalizedALPN
+	if nested == "" {
+		nested = normalizedProtocol
+	}
+
+	top := ""
+	topRequiresLegacyFallback := false
+	if len(topLevel) == 1 {
+		value := strings.TrimSpace(topLevel[0])
+		if value == "h2" {
+			top = "snell-ech/1"
+			topRequiresLegacyFallback = true
+		} else {
+			top, err = normalizeClashSnellECHTLSALPN(value)
+			if err != nil {
+				return "", false, err
+			}
+		}
+	}
+	if nested != "" && top != "" && nested != top {
+		return "", false, errors.New("snell ECH-TLS nested and top-level ALPN values conflict")
+	}
+	alpn := nested
+	if alpn == "" {
+		alpn = top
+	}
+	if alpn == "" {
+		alpn = "snell-ech/1"
+	}
+
+	legacyFallback := false
+	if nestedLegacyFallback != nil {
+		legacyFallback = *nestedLegacyFallback
+	}
+	if topRequiresLegacyFallback {
+		if nestedLegacyFallback != nil && !*nestedLegacyFallback {
+			return "", false, errors.New("snell ECH-TLS top-level h2 conflicts with legacy-fallback=false")
+		}
+		legacyFallback = true
+	}
+	return alpn, legacyFallback, nil
+}
+
+func normalizeClashSnellECHTLSALPN(value string) (string, error) {
+	switch strings.TrimSpace(value) {
+	case "":
+		return "", nil
+	case "snell-ech/1", "oix-snell/1":
+		return "snell-ech/1", nil
+	default:
+		return "", fmt.Errorf("unsupported Snell ECH-TLS ALPN %q", value)
+	}
 }
 
 // normalizeClashClientFingerprint translates Clash fingerprint names to the
