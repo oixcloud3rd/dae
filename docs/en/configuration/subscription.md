@@ -13,18 +13,32 @@ skipped and included in the summarized warning; `udp` and `tfo` are accepted as
 capability hints. Ordinary per-node TLS client fingerprints are rejected rather
 than silently downgraded, except for VLESS Reality and Snell ECH-TLS.
 
-Clash Snell ECH-TLS nodes automatically use uTLS with the `chrome_auto`
-ClientHello when no TLS implementation is specified. Explicit
-`tls-implementation` and `client-fingerprint` values take precedence. Clash
-fingerprint names `chrome`, `firefox`, `safari`, `iOS`, `android`, `edge`,
-`360`, `qq`, and `random` are translated to the corresponding uTLS ClientHello
-IDs supported by outbound.
+Clash Snell ECH-TLS nodes default to Identity v2, ALPN `snell-ech/1`, uTLS with
+the `chrome_auto` ClientHello, no legacy fallback, and no preconnections. The
+parser maps `alpn`, `protocol`, `identity-version`, `legacy-fallback`,
+`preconnect`, `host`/`sni`, `ech-config`, and `client-fingerprint` from
+`obfs-opts`. The deprecated `oix-snell/1` protocol name is normalized to
+`snell-ech/1`. Clash fingerprint names `chrome`, `firefox`, `safari`, `iOS`,
+`android`, `edge`, `360`, `qq`, and `random` are translated to the
+corresponding outbound uTLS ClientHello IDs.
 
-Snell ECH-TLS uses the raw byte stream after the TLS handshake and no longer
-uses WebSocket framing. Its ALPN is fixed to `h2`, although the application data
-is not HTTP/2. Legacy `path` and `ws-host` values are accepted but ignored and
-are removed from canonical node links. An explicit `alpn: [h2]` is redundant
-but accepted; other ALPN values are rejected.
+Snell ECH-TLS uses the raw byte stream after the TLS handshake and does not use
+WebSocket framing. A legacy top-level scalar or single-item `alpn: [h2]` is
+migrated to `snell-ech/1` with explicit `legacy-fallback: true`; fallback is
+attempted only for ALPN incompatibility, and Identity v2 uses Identity v1 on
+that retry. Use the same explicit `legacy-fallback` setting for old servers.
+Nested and top-level ALPN settings that conflict are rejected. Direct
+`snell://` links that omit ALPN or Identity retain their old implicit defaults.
+
+Certificate verification is mandatory. Explicit `skip-cert-verify: false` and
+`insecure: false` values under `obfs-opts` are accepted, and generated links
+explicitly disable the global insecure setting; either value set to `true`
+rejects the node. `preconnect` must be between 0 and 4, and a non-zero value
+requires Snell v4/v5-compatible wire, ECH-TLS, and `reuse: true`. The parser
+rejects non-empty `ech-config-file`, `ca-file`, `fingerprint`, `certificate`,
+`private-key`, and `headers` options because outbound links cannot represent
+them safely. Legacy `path` and `ws-host` values are accepted only as ignored
+ECH-TLS compatibility fields and are removed from generated links.
 
 ## oixCloud managed configuration
 

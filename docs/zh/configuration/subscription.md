@@ -11,16 +11,29 @@ VMess、VLESS、Trojan、Hysteria2、TUIC、AnyTLS 和 Snell 节点；策略组�
 可被接受。普通 TLS 节点的逐节点指纹不会被静默降级，仅 VLESS Reality 和
 Snell ECH-TLS 保留 `client-fingerprint`。
 
-Clash 中的 Snell ECH-TLS 节点会在未显式指定 TLS 实现时自动使用 uTLS，
-并默认模仿 `chrome_auto` ClientHello。显式设置的
-`tls-implementation` 或 `client-fingerprint` 优先。Clash 指纹名称
-`chrome`、`firefox`、`safari`、`iOS`、`android`、`edge`、`360`、`qq` 和
-`random` 会自动转换为 outbound 支持的 uTLS ClientHello ID。
+Clash 中的 Snell ECH-TLS 节点默认使用 Identity v2、ALPN
+`snell-ech/1`、模仿 `chrome_auto` ClientHello 的 uTLS，不启用旧协议回退，
+也不预连接。解析器会无损映射 `obfs-opts` 中的 `alpn`、`protocol`、
+`identity-version`、`legacy-fallback`、`preconnect`、`host`/`sni`、
+`ech-config` 和 `client-fingerprint`。旧协议名 `oix-snell/1` 会规范化为
+`snell-ech/1`。Clash 指纹名称 `chrome`、`firefox`、`safari`、`iOS`、
+`android`、`edge`、`360`、`qq` 和 `random` 会转换为 outbound 支持的 uTLS
+ClientHello ID。
 
-Snell ECH-TLS 使用 TLS 握手后的原始字节流，不再使用 WebSocket。ALPN 固定
-为 `h2`，但应用数据不是 HTTP/2 帧。旧配置中的 `path` 和 `ws-host` 会被接受
-但忽略，生成的规范化节点链接不会保留这些字段。显式 `alpn: [h2]` 可以省略；
-其他 ALPN 值会被拒绝。
+Snell ECH-TLS 使用 TLS 握手后的原始字节流，不使用 WebSocket。旧的顶层单值
+或单元素 `alpn: [h2]` 会迁移为 `snell-ech/1` 并显式启用
+`legacy-fallback: true`；只有 ALPN 不兼容才会回退，Identity v2 在该次重试中
+使用 Identity v1。连接旧服务器时也应采用这一显式回退配置。嵌套 ALPN 与
+顶层 ALPN 冲突时节点会被拒绝。未写 ALPN 或 Identity 的直接 `snell://` 链接
+仍保留旧的隐式默认行为。
+
+证书校验不可关闭。`obfs-opts` 中显式的 `skip-cert-verify: false` 和
+`insecure: false` 可以接受，生成的链接会显式覆盖全局 insecure；任一字段为
+`true` 时节点会被拒绝。`preconnect` 必须在 0–4 之间，非零值要求 v4/v5
+兼容 wire、ECH-TLS 和 `reuse: true`。由于 outbound 链接无法安全表达，非空的
+`ech-config-file`、`ca-file`、`fingerprint`、`certificate`、`private-key` 和
+`headers` 会导致节点被拒绝。旧 `path` 和 `ws-host` 仅作为 ECH-TLS 兼容字段
+接受并忽略，生成的规范化链接不会保留它们。
 
 ## oixCloud 托管配置
 
