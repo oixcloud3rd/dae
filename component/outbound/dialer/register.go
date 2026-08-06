@@ -15,6 +15,7 @@ import (
 	"github.com/daeuniverse/dae/component/daedns"
 	D "github.com/daeuniverse/outbound/dialer"
 	"github.com/daeuniverse/outbound/dialer/stickyip"
+	"github.com/daeuniverse/outbound/netproxy"
 	"github.com/daeuniverse/outbound/protocol/direct"
 	"github.com/sirupsen/logrus"
 )
@@ -39,6 +40,7 @@ func NewFromLinkWithProxyCacheContext(ctx context.Context, gOption *GlobalOption
 	// First, create the protocol dialer with direct dialer to get the property
 	d, _p, err := D.NewNetproxyDialerFromLink(scopedBaseDialer, &gOption.ExtraOption, normalizedLink)
 	if err != nil {
+		closeSupersededDialer(d)
 		return nil, err
 	}
 	p := Property{
@@ -55,11 +57,15 @@ func NewFromLinkWithProxyCacheContext(ctx context.Context, gOption *GlobalOption
 			AddressHost:     proxyHost,
 		})
 		if err != nil {
+			closeSupersededDialer(d)
 			return nil, err
 		}
 		scopedBaseDialer = scopeTransportCacheDialer(baseDialer, gOption.TransportCacheNamespace)
-		d, _p, err = D.NewNetproxyDialerFromLink(scopedBaseDialer, &gOption.ExtraOption, normalizedLink)
+		nextDialer, nextProperty, nextErr := D.NewNetproxyDialerFromLink(scopedBaseDialer, &gOption.ExtraOption, normalizedLink)
+		closeSupersededDialer(d)
+		d, _p, err = nextDialer, nextProperty, nextErr
 		if err != nil {
+			closeSupersededDialer(d)
 			return nil, err
 		}
 		p = Property{
@@ -90,8 +96,11 @@ func NewFromLinkWithProxyCacheContext(ctx context.Context, gOption *GlobalOption
 		scopedStickyWrapper := scopeTransportCacheDialer(stickyWrapper, gOption.TransportCacheNamespace)
 
 		// Re-create the protocol dialer with sticky wrapper as base
-		d, _p, err = D.NewNetproxyDialerFromLink(scopedStickyWrapper, &gOption.ExtraOption, normalizedLink)
+		nextDialer, nextProperty, nextErr := D.NewNetproxyDialerFromLink(scopedStickyWrapper, &gOption.ExtraOption, normalizedLink)
+		closeSupersededDialer(d)
+		d, _p, err = nextDialer, nextProperty, nextErr
 		if err != nil {
+			closeSupersededDialer(d)
 			return nil, err
 		}
 		p = Property{
@@ -115,6 +124,12 @@ func NewFromLinkWithProxyCacheContext(ctx context.Context, gOption *GlobalOption
 	}
 
 	return daeDialer, nil
+}
+
+func closeSupersededDialer(dialer netproxy.Dialer) {
+	if closer, ok := dialer.(interface{ Close() error }); ok {
+		_ = closer.Close()
+	}
 }
 
 // needsStickyIpCaching checks if the given address needs sticky IP caching.

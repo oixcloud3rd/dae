@@ -61,6 +61,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/metacubex/blake3 v0.1.0 // indirect
+	github.com/metacubex/utls v1.8.7 // indirect
 	github.com/mikelolasagasti/xz v1.0.1 // indirect
 	github.com/minio/minlz v1.0.1 // indirect
 	github.com/nwaples/rardecode/v2 v2.2.0 // indirect
@@ -72,7 +73,7 @@ require (
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/sagernet/sing v0.8.12-0.20260727003324-d096a164bc7f // indirect
 	github.com/sagernet/sing-shadowtls v0.2.0 // indirect
-	github.com/sagernet/sing-snell v0.0.0-20260727102834-1cb49a5bae3f // indirect
+	github.com/sagernet/sing-snell v0.0.0-20260806050542-54ec3d09fd26 // indirect
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/samber/oops v1.21.0 // indirect
 	github.com/sorairolake/lzip-go v0.3.8 // indirect
@@ -106,7 +107,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mzz2017/disk-bloom v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/refraction-networking/utls v1.8.2 // indirect
 	github.com/seiflotfy/cuckoofilter v0.0.0-20240715131351-a2f2c23f1771 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	gitlab.com/yawning/chacha20.git v0.0.0-20230427033715-7877545b1b37 // indirect
@@ -122,6 +122,6 @@ replace github.com/olicesx/quic-go => github.com/olicesx/quic-go v0.0.0-20260428
 //replace github.com/daeuniverse/dae-config-dist/go/dae_config => /home/mzz/antlrProjects/dae-config/build/go/dae_config
 
 // Use the pushed perf/complete-optimizations fork head with QUIC window tuning + upstream cherry-picks.
-replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260726195624-f31924f89fd0
+replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260806061520-6605d3aea561
 
-replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260727102834-1cb49a5bae3f
+replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260806050542-54ec3d09fd26

@@ -267,6 +267,13 @@ func NewDialerContext(ctx context.Context, dialer netproxy.Dialer, option *Globa
 	}
 	d.Dialer = dialer
 	d.recoveryManager = newDialerRecoveryManager(d)
+	if starter, ok := dialer.(interface{ Start(context.Context) error }); ok {
+		if err := starter.Start(ctx); err != nil && option != nil && option.Log != nil {
+			option.Log.WithError(err).
+				WithField("dialer", d.Property().Name).
+				Warnln("Failed to start outbound dialer lifecycle")
+		}
+	}
 
 	// Initialize recovery detection with adjusted max backoff
 	d.initRecoveryDetection(option.CheckInterval)

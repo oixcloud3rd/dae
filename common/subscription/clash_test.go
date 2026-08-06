@@ -20,6 +20,7 @@ import (
 	outboundTrojan "github.com/daeuniverse/outbound/dialer/trojan"
 	outboundTUIC "github.com/daeuniverse/outbound/dialer/tuic"
 	outboundV2Ray "github.com/daeuniverse/outbound/dialer/v2ray"
+	protocolSnell "github.com/daeuniverse/outbound/protocol/snell"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -83,7 +84,13 @@ proxies:
 	require.Equal(t, "ech-tls", snellConfig.Obfs)
 	require.NotContains(t, nodes[1], "path=")
 	require.True(t, snellConfig.Reuse)
-	require.True(t, snellConfig.Identity)
+	require.Equal(t, protocolSnell.IdentityV1, snellConfig.Identity)
+	require.Equal(t, "snell-ech/1", snellConfig.ALPN)
+	require.True(t, snellConfig.LegacyFallback)
+	require.Equal(t, 0, snellConfig.Preconnect)
+	canonicalSnellURL, err := url.Parse(nodes[1])
+	require.NoError(t, err)
+	require.Equal(t, "0", canonicalSnellURL.Query().Get("preconnect"))
 	require.True(t, snellConfig.SkipVerifyExplicit)
 	require.False(t, snellConfig.SkipCertVerify)
 	require.Equal(t, "utls", snellConfig.TLSImplementation)
@@ -127,6 +134,11 @@ proxies:
 	require.NoError(t, err)
 	require.Equal(t, "tls", standardTLS.TLSImplementation)
 	require.Empty(t, standardTLS.ClientFingerprint)
+	require.Equal(t, protocolSnell.IdentityV2, standardTLS.Identity)
+	require.Equal(t, "snell-ech/1", standardTLS.ALPN)
+	require.True(t, standardTLS.SkipVerifyExplicit)
+	require.False(t, standardTLS.SkipCertVerify)
+	require.Equal(t, 0, standardTLS.Preconnect)
 
 	explicitUTLS, err := outboundSnell.ParseURL(nodes[1])
 	require.NoError(t, err)
@@ -158,21 +170,116 @@ func TestNormalizeClashClientFingerprint(t *testing.T) {
 	}
 }
 
-func TestResolveSubscriptionAsClashSnellECHTLSRejectsNonH2ALPN(t *testing.T) {
+func TestResolveClashSnellIdentityCompatibility(t *testing.T) {
 	t.Parallel()
-	_, err := ResolveSubscriptionAsClash(logrus.New(), []byte(`
+	falseValue := false
+	trueValue := true
+	disabled := 0
+	v1 := 1
+	v2 := 2
+
+	identity, err := resolveClashSnellIdentity(nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, identity)
+	identity, err = resolveClashSnellIdentity(&falseValue, nil)
+	require.NoError(t, err)
+	require.Equal(t, 0, identity)
+	identity, err = resolveClashSnellIdentity(&trueValue, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, identity)
+	for expected, nested := range map[int]*int{0: &disabled, 1: &v1, 2: &v2} {
+		identity, err = resolveClashSnellIdentity(nil, nested)
+		require.NoError(t, err)
+		require.Equal(t, expected, identity)
+	}
+	_, err = resolveClashSnellIdentity(&trueValue, &v2)
+	require.ErrorContains(t, err, "conflict")
+}
+
+func TestResolveSubscriptionAsClashSnellECHTLSFields(t *testing.T) {
+	t.Parallel()
+	nodes, err := ResolveSubscriptionAsClash(logrus.New(), []byte(`
 proxies:
-  - name: wrong-alpn
+  - name: all-fields
     type: snell
     server: snell.example
     port: 443
     psk: password
-    alpn: [http/1.1]
+    version: 5
+    reuse: true
+    alpn: snell-ech/1
     obfs-opts:
       mode: ech-tls
+      host: host.example
+      sni: sni.example
+      alpn: oix-snell/1
+      protocol: snell-ech/1
+      identity-version: 2
+      legacy-fallback: true
+      preconnect: 4
       ech-config: "AAQ+DAAA"
+      insecure: false
+      skip-cert-verify: false
+      client-fingerprint: firefox
 `))
-	require.ErrorContains(t, err, "no valid supported proxies")
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+
+	configuration, err := outboundSnell.ParseURL(nodes[0])
+	require.NoError(t, err)
+	require.Equal(t, 5, configuration.Version)
+	require.True(t, configuration.Reuse)
+	require.Equal(t, "host.example", configuration.ObfsHost)
+	require.Equal(t, "sni.example", configuration.SNI)
+	require.Equal(t, "snell-ech/1", configuration.ALPN)
+	require.Equal(t, protocolSnell.IdentityV2, configuration.Identity)
+	require.True(t, configuration.LegacyFallback)
+	require.Equal(t, 4, configuration.Preconnect)
+	require.True(t, configuration.SkipVerifyExplicit)
+	require.False(t, configuration.SkipCertVerify)
+	require.Equal(t, "utls", configuration.TLSImplementation)
+	require.Equal(t, "firefox_auto", configuration.ClientFingerprint)
+}
+
+func TestResolveSubscriptionAsClashSnellECHTLSRejectsUnsafeOrConflictingOptions(t *testing.T) {
+	t.Parallel()
+	tests := map[string]string{
+		"unsupported ALPN":                  "alpn: [http/1.1]",
+		"multiple top-level ALPN":           "alpn: [snell-ech/1, h2]",
+		"nested and top-level conflict":     "alpn: [h2]\n    obfs-opts: {mode: ech-tls, alpn: http/1.1, ech-config: 'AAQ+DAAA'}",
+		"identity conflict":                 "identity: true\n    obfs-opts: {mode: ech-tls, identity-version: 2, ech-config: 'AAQ+DAAA'}",
+		"insecure":                          "obfs-opts: {mode: ech-tls, insecure: true, ech-config: 'AAQ+DAAA'}",
+		"skip certificate verification":     "obfs-opts: {mode: ech-tls, skip-cert-verify: true, ech-config: 'AAQ+DAAA'}",
+		"preconnect without reuse":          "obfs-opts: {mode: ech-tls, preconnect: 1, ech-config: 'AAQ+DAAA'}",
+		"preconnect above limit":            "reuse: true\n    obfs-opts: {mode: ech-tls, preconnect: 5, ech-config: 'AAQ+DAAA'}",
+		"version 6":                         "version: 6\n    reuse: true\n    obfs-opts: {mode: ech-tls, ech-config: 'AAQ+DAAA'}",
+		"ECH config file":                   "obfs-opts: {mode: ech-tls, ech-config-file: /tmp/ech.pem, ech-config: 'AAQ+DAAA'}",
+		"CA file":                           "obfs-opts: {mode: ech-tls, ca-file: /tmp/ca.pem, ech-config: 'AAQ+DAAA'}",
+		"certificate fingerprint":           "obfs-opts: {mode: ech-tls, fingerprint: abc, ech-config: 'AAQ+DAAA'}",
+		"client certificate":                "obfs-opts: {mode: ech-tls, certificate: cert, ech-config: 'AAQ+DAAA'}",
+		"client private key":                "obfs-opts: {mode: ech-tls, private-key: key, ech-config: 'AAQ+DAAA'}",
+		"headers":                           "obfs-opts: {mode: ech-tls, headers: {X-Test: value}, ech-config: 'AAQ+DAAA'}",
+		"legacy h2 explicitly disabled":     "alpn: h2\n    obfs-opts: {mode: ech-tls, legacy-fallback: false, ech-config: 'AAQ+DAAA'}",
+		"nested protocol and ALPN conflict": "obfs-opts: {mode: ech-tls, alpn: snell-ech/1, protocol: invalid/1, ech-config: 'AAQ+DAAA'}",
+	}
+	for name, options := range tests {
+		name := name
+		options := options
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			config := fmt.Sprintf(`
+proxies:
+  - name: invalid
+    type: snell
+    server: snell.example
+    port: 443
+    psk: password
+    %s
+`, options)
+			_, err := ResolveSubscriptionAsClash(logrus.New(), []byte(config))
+			require.ErrorContains(t, err, "no valid supported proxies")
+		})
+	}
 }
 
 func TestResolveSubscriptionAsClashSkipsUnsupportedOptions(t *testing.T) {
