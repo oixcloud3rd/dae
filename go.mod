@@ -121,7 +121,7 @@ replace github.com/olicesx/quic-go => github.com/olicesx/quic-go v0.0.0-20260428
 //replace github.com/cilium/ebpf v0.20.0
 //replace github.com/daeuniverse/dae-config-dist/go/dae_config => /home/mzz/antlrProjects/dae-config/build/go/dae_config
 
-// Use the pushed perf/complete-optimizations fork head with QUIC window tuning + upstream cherry-picks.
-replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260806063604-4bedeab74690
+// Use the main-patch fork with Snell
+replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260819162843-86383916f862
 
 replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260806061941-924f2fe9981d
