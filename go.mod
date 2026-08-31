@@ -27,11 +27,11 @@ require (
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
-	golang.org/x/crypto v0.48.0
+	golang.org/x/crypto v0.53.0
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa
-	golang.org/x/net v0.50.0
-	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/net v0.55.0
+	golang.org/x/sync v0.21.0
+	golang.org/x/sys v0.46.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -40,7 +40,7 @@ require (
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/STARRY-S/zip v0.2.3 // indirect
-	github.com/andybalholm/brotli v1.2.0 // indirect
+	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/awnumar/fastrand v0.0.0-20210315215012-30ee0990fa2d // indirect
 	github.com/awnumar/memcall v0.5.0 // indirect
 	github.com/awnumar/memguard v0.23.0 // indirect
@@ -57,7 +57,7 @@ require (
 	github.com/google/pprof v0.0.0-20260202012954-cb029daf43ef // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
-	github.com/klauspost/compress v1.18.4 // indirect
+	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/metacubex/blake3 v0.1.0 // indirect
@@ -73,7 +73,7 @@ require (
 	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/sagernet/sing v0.8.12-0.20260727003324-d096a164bc7f // indirect
 	github.com/sagernet/sing-shadowtls v0.2.0 // indirect
-	github.com/sagernet/sing-snell v0.0.0-20260806061941-924f2fe9981d // indirect
+	github.com/sagernet/sing-snell v0.0.0-20260831075042-aae777dc471c // indirect
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/samber/oops v1.21.0 // indirect
 	github.com/sorairolake/lzip-go v0.3.8 // indirect
@@ -84,8 +84,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.40.0 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
-	golang.org/x/mod v0.33.0 // indirect
-	golang.org/x/tools v0.42.0 // indirect
+	golang.org/x/mod v0.36.0 // indirect
+	golang.org/x/tools v0.45.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260217215200-42d3e9bedb6d // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
@@ -110,8 +110,8 @@ require (
 	github.com/seiflotfy/cuckoofilter v0.0.0-20240715131351-a2f2c23f1771 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	gitlab.com/yawning/chacha20.git v0.0.0-20230427033715-7877545b1b37 // indirect
-	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/term v0.44.0 // indirect
+	golang.org/x/text v0.38.0 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
 )
 
@@ -122,6 +122,6 @@ replace github.com/olicesx/quic-go => github.com/olicesx/quic-go v0.0.0-20260428
 //replace github.com/daeuniverse/dae-config-dist/go/dae_config => /home/mzz/antlrProjects/dae-config/build/go/dae_config
 
 // Use the main-patch fork with Snell
-replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260819162843-86383916f862
+replace github.com/daeuniverse/outbound => github.com/oixcloud3rd/outbound v0.0.0-20260831081355-c5d56eb67974
 
-replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260806061941-924f2fe9981d
+replace github.com/sagernet/sing-snell => github.com/oixcloud3rd/sing-snell v0.0.0-20260831075042-aae777dc471c
