@@ -412,8 +412,6 @@ jobs:
               https://${{ secrets.FURY_TOKEN }}@push.fury.io/oixcloud3rd/
 
   upload-release:
-    permissions:
-      contents: write
     needs: [build]
     runs-on: ubuntu-latest
     # Only this job may write: action-gh-release attaches the assets to the tag.
