@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/daeuniverse/dae/common/consts"
 	"github.com/daeuniverse/dae/common/netutils"
@@ -189,6 +190,9 @@ func TestUpstreamResolverRetriesAfterInitializerFailure(t *testing.T) {
 	if state := resolver.state.Load(); state != &errorSentinel {
 		t.Fatalf("expected error sentinel after failed init, got %#v", state)
 	}
+	resolver.lastInitAttemptNano.Store(
+		time.Now().Add(-upstreamInitRetryInterval).UnixNano(),
+	)
 
 	upstream, err := resolver.GetUpstream(context.Background())
 	if err != nil {
@@ -237,6 +241,9 @@ func TestUpstreamResolverRetriesAfterFinishCallbackFailure(t *testing.T) {
 	if state := resolver.state.Load(); state != &errorSentinel {
 		t.Fatalf("expected error sentinel after callback failure, got %#v", state)
 	}
+	resolver.lastInitAttemptNano.Store(
+		time.Now().Add(-upstreamInitRetryInterval).UnixNano(),
+	)
 
 	upstream, err := resolver.GetUpstream(context.Background())
 	if err != nil {
