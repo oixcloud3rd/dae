@@ -766,14 +766,6 @@ func (r *Router) lookupBootstrapIPAddr(ctx context.Context, network, host string
 	return nil, fmt.Errorf("bootstrap resolver returned no usable address for %q", host)
 }
 
-func subscriptionHost(link string) string {
-	hosts := subscriptionHosts(link)
-	if len(hosts) == 0 {
-		return ""
-	}
-	return hosts[0]
-}
-
 func subscriptionHosts(link string) []string {
 	if link == "" {
 		return nil
