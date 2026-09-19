@@ -229,8 +229,8 @@ github.com/nwaples/rardecode/v2 v2.2.0/go.mod h1:7uz379lSxPe6j9nvzxUZ+n7mnJNgjsR
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
-github.com/oixcloud3rd/outbound v0.0.0-20260919070520-11a95077f1a4 h1:bZwkR3F2c8C5G4labKBds4bo4FvefDymE0Okc+Iqzks=
-github.com/oixcloud3rd/outbound v0.0.0-20260919070520-11a95077f1a4/go.mod h1:5KNfpIOsocCGsOxd59xAZr3ZgpYCWNsphQhtvYqhCK0=
+github.com/oixcloud3rd/outbound v0.0.0-20260919074141-d03d99ec8c34 h1:EdpavClPJ9qpNk9CiliqprtjhcoUVti3Y6uU10IwG2o=
+github.com/oixcloud3rd/outbound v0.0.0-20260919074141-d03d99ec8c34/go.mod h1:/kmj+AUtDyDPc0HXcvvptYgSKrIyPSVN9EvCKFfPjVw=
 github.com/oixcloud3rd/sing-snell v0.0.0-20260919065743-e4148a9db725 h1:IRgbtPXK1wBL1lrZEmjrC9eMK2kwLC8TStyqIaBcqOs=
 github.com/oixcloud3rd/sing-snell v0.0.0-20260919065743-e4148a9db725/go.mod h1:wdPnrzkEbbxIGryTzQd2tU988Le/CwkhUgOBqzTX1yw=
 github.com/oklog/ulid/v2 v2.1.1 h1:suPZ4ARWLOJLegGFiZZ1dFAkqzhMjL3J1TzI+5wHz8s=
