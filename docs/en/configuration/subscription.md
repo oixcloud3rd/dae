@@ -69,10 +69,18 @@ proxies:
 ```
 
 `h3` has a 10-second tunnel establishment budget and does not fall back.
-`auto` tries H3 for 2 seconds, then uses ECH-TLS TCP at the same address/port,
-with a 30-second cooldown before retrying H3. Caller deadlines take precedence.
-Fallback retains certificate verification and Identity v2, defaults to
-`snell-ech/1` ALPN, and never replays Snell data. Fingerprints/uTLS apply only
+`auto` follows Snell Happy Eyeballs in `oixcloud3rd/sing-box`: H3 starts first;
+ECH-TLS TCP at the same address/port starts after 250 ms without a live session,
+or twice the live session's smoothed RTT clamped to 100-1000 ms. H3 failure starts
+TCP immediately. The first successful transport wins. After TCP wins, H3 probes
+within its original 2-second budget: success keeps the QUIC session warm and
+clears cooldown; failure starts a 30-second cooldown. Its unused stream is closed.
+An H3 winner cancels TCP and closes any late connection. Caller cancellation before
+a winner stops the race; dialer closure also stops background probes. Shared QUIC
+handshakes are independently bounded, so one canceled waiter does not affect the
+others. Only the winner sends Snell data. TCP retains certificate
+verification and Identity v2 and defaults to `snell-ech/1` ALPN.
+QUIC transport parameters use library defaults. Fingerprints/uTLS apply only
 to TCP; H3 uses Go TLS 1.3 and `h3` ALPN. Legacy `path/ws-host` remain ignored.
 
 Under `obfs-opts`, `cc-override` overrides `congestion-controller`; aliases

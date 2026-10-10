@@ -63,10 +63,17 @@ proxies:
       congestion-controller: bbr3
 ```
 
-`h3` 的建隧道预算为 10 秒，不回退；`auto` 尝试 H3 2 秒，失败后回退到
-同地址、同端口的 ECH-TLS TCP，冷却 30 秒后重新尝试 H3。调用方更短的
-deadline 优先。回退仍校验证书并使用 Identity v2，默认 ALPN 为
-`snell-ech/1`，不会重放已发送的 Snell 数据。指纹/uTLS 仅用于 TCP，
+`h3` 的建隧道预算为 10 秒，不回退；`auto` 对齐 `oixcloud3rd/sing-box`
+的 Snell Happy Eyeballs：先启动 H3，无可用会话时延迟 250 毫秒启动
+同地址、同端口的 ECH-TLS TCP；已有会话时采用两倍平滑 RTT，限制在
+100–1000 毫秒。H3 提前失败则立即启动 TCP，首个成功的传输获胜。
+TCP 获胜后，H3 在原有 2 秒预算内继续探测；成功则保留 QUIC 会话并清除
+冷却，失败则冷却 30 秒，未使用的 H3 流会关闭。H3 获胜则取消 TCP
+并关闭迟到连接。选出获胜连接前，调用方取消或超时会停止竞速；
+关闭或重载 dialer 也会停止后台探测。共享 QUIC 握手独立限时，
+单个等待者取消不影响其他等待者。仅获胜连接发送 Snell 数据。
+TCP 仍校验证书并使用 Identity v2，默认 ALPN 为 `snell-ech/1`。
+QUIC 传输参数使用依赖库默认值。指纹/uTLS 仅用于 TCP，
 H3 使用 Go TLS 1.3 和 `h3` ALPN。旧 `path/ws-host` 仍被忽略。
 
 `obfs-opts.cc-override` 优先于 `congestion-controller`；也接受
