@@ -1,5 +1,5 @@
 name: Publish Release
-run-name: Publish ${{ inputs.tag }} by @${{ github.actor }}
+run-name: Publish ${{ inputs.tag || 'nightly' }} by @${{ github.actor }}
 
 on:
   workflow_dispatch:
@@ -12,6 +12,18 @@ on:
         type: boolean
         required: true
         default: false
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to publish as nightly
+        type: string
+        required: true
+      tag:
+        type: string
+        default: ""
+      prerelease:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -27,7 +39,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
-          ref: refs/tags/${{ inputs.tag }}
+          ref: ${{ inputs.ref || format('refs/tags/{0}', inputs.tag) }}
 
       # The release must be built from the tag, not from a modified tree: the
       # workflow used to `sed -i` the Makefile before packing dae-full-src.zip,
@@ -143,6 +155,12 @@ jobs:
           REF: ${{ inputs.tag }}
         run: |
           version=${REF}
+          if [[ -z "$version" ]]; then
+            date=$(git log -1 --format=%cd --date=format:%Y%m%d)
+            count=$(git rev-list --count HEAD)
+            commit=$(git rev-parse --short=6 HEAD)
+            version="0.0.0.nightly.${date}.r${count}.${commit}"
+          fi
           echo "VERSION=$version" >> $GITHUB_OUTPUT
           echo "VERSION=$version" >> $GITHUB_ENV
 
@@ -386,7 +404,7 @@ jobs:
 
   publish-packages:
     name: Publish packages
-    if: github.event_name != 'push'
+    if: github.event_name != 'push' && inputs.ref == ''
     needs: [build]
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -410,7 +428,7 @@ jobs:
               https://${{ secrets.FURY_TOKEN }}@push.fury.io/oixcloud3rd/
 
   upload-release:
-    needs: [build]
+    needs: [preflight, build]
     runs-on: ubuntu-latest
     # Only this job may write: action-gh-release attaches the assets to the tag.
     permissions:
@@ -427,15 +445,30 @@ jobs:
           cd release
           ls -lh */*
 
+      - name: Checkout nightly commit
+        if: inputs.ref != ''
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          path: source
+
+      - name: Move only the nightly tag
+        if: inputs.ref != ''
+        working-directory: source
+        run: git push --force origin HEAD:refs/tags/nightly
+
       - name: Upload full source and artifacts to GitHub release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ inputs.tag }}
+          tag_name: ${{ inputs.tag || 'nightly' }}
+          target_commitish: ${{ needs.preflight.outputs.sha }}
           files: release/*/*
           prerelease: ${{ inputs.prerelease }}
+          make_latest: ${{ !inputs.prerelease }}
 
   docker:
     name: Publish Docker images
+    if: inputs.ref == ''
     needs: [upload-release]
     permissions:
       contents: read

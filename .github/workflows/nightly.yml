@@ -37,6 +37,9 @@ jobs:
     if: needs.changes.outputs.changed == 'true'
     permissions:
       contents: write
-    uses: ./.github/workflows/prerelease.yml
+      # The reusable release workflow declares this for its (skipped) Docker job.
+      packages: write
+    uses: ./.github/workflows/release.yml
     with:
       ref: ${{ needs.changes.outputs.sha }}
+    secrets: inherit

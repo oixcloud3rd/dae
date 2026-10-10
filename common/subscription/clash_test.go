@@ -196,6 +196,63 @@ func TestResolveClashSnellIdentityCompatibility(t *testing.T) {
 	require.ErrorContains(t, err, "conflict")
 }
 
+func TestClashSnellHTTP3Fields(t *testing.T) {
+	for _, mode := range []string{"tcp", "h3", "auto"} {
+		t.Run(mode, func(t *testing.T) {
+			identity := "identity: true"
+			if mode == "tcp" {
+				identity = ""
+			}
+			config := fmt.Sprintf(`proxies:
+  - name: test
+    type: snell
+    server: snell.example
+    port: 443
+    psk: password
+    %s
+    reuse: true
+    obfs-opts: {mode: ech-tls, transport: %s, identity-version: 2, preconnect: 1, ech-config: 'AAQ+DAAA'}
+`, identity, mode)
+			nodes, err := ResolveSubscriptionAsClash(logrus.New(), []byte(config))
+			require.NoError(t, err)
+			s, err := outboundSnell.ParseURL(nodes[0])
+			require.NoError(t, err)
+			require.Equal(t, mode, s.Transport)
+			require.Equal(t, protocolSnell.IdentityV2, s.Identity)
+			require.Equal(t, 1, s.Preconnect)
+		})
+	}
+	for _, tc := range []struct {
+		fields string
+		valid  bool
+	}{
+		{"congestion-controller: future, cc_override: bbr3, cwnd: 1000", true},
+		{"congestion_control: future", true},
+		{"congestion-controller: bbr, congestion_control: bbr3", false},
+		{"cc-override: bbr, cc_override: bbr3", false},
+		{"bbr-profile: standard", false},
+		{"identity-version: 1", false},
+	} {
+		config := fmt.Sprintf(`proxies:
+  - {name: test, type: snell, server: snell.example, port: 443, psk: password,
+     obfs-opts: {mode: ech-tls, transport: auto, ech-config: 'AAQ+DAAA', %s}}
+`, tc.fields)
+		nodes, err := ResolveSubscriptionAsClash(logrus.New(), []byte(config))
+		if !tc.valid {
+			require.Error(t, err, tc.fields)
+			continue
+		}
+		require.NoError(t, err)
+		s, err := outboundSnell.ParseURL(nodes[0])
+		require.NoError(t, err)
+		require.Equal(t, "future", s.CongestionControl)
+		if s.CCOverride != "" {
+			require.Equal(t, "bbr3", s.CCOverride)
+			require.Equal(t, 1000, s.Cwnd)
+		}
+	}
+}
+
 func TestResolveSubscriptionAsClashSnellECHTLSFields(t *testing.T) {
 	t.Parallel()
 	nodes, err := ResolveSubscriptionAsClash(logrus.New(), []byte(`

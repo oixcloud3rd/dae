@@ -69,8 +69,14 @@ type clashSnellProxy struct {
 
 type clashSnellObfs struct {
 	// The "ech-tls" mode value is an oixCloud-specific Clash extension.
-	Mode string `yaml:"mode"`
-	Host string `yaml:"host"`
+	Mode                   string `yaml:"mode"`
+	Host                   string `yaml:"host"`
+	Transport              string `yaml:"transport"`
+	CongestionController   string `yaml:"congestion-controller"`
+	CongestionControlAlias string `yaml:"congestion_control"`
+	CCOverride             string `yaml:"cc-override"`
+	CCOverrideAlias        string `yaml:"cc_override"`
+	Cwnd                   *int   `yaml:"cwnd"`
 
 	// The following ECH-TLS transport options are oixCloud-specific Clash
 	// extensions, not fields from standard Clash Snell.
@@ -331,6 +337,11 @@ func addSnellObfsQuery(
 	topLevelIdentity *bool,
 	reuse *bool,
 ) error {
+	for _, key := range []string{"bbr-profile", "bbr_profile"} {
+		if _, ok := obfs.UnsupportedOptions[key]; ok {
+			return errors.New("snell BBR profiles are not supported")
+		}
+	}
 	if err := validateUnsupportedClashOptions(obfs.UnsupportedOptions); err != nil {
 		return fmt.Errorf("unsupported Snell obfs fields: %w", err)
 	}
@@ -338,6 +349,43 @@ func addSnellObfsQuery(
 		return errors.New("snell obfs-opts.mode is required")
 	}
 	isECHTLS := strings.EqualFold(obfs.Mode, "ech-tls")
+	transport := strings.ToLower(strings.TrimSpace(obfs.Transport))
+	switch transport {
+	case "", "tcp":
+	case "h3", "auto":
+		if !isECHTLS {
+			return errors.New("snell HTTP/3 requires ECH-TLS")
+		}
+	default:
+		return fmt.Errorf("unsupported Snell transport %q", transport)
+	}
+	cc, err := coalesceField("congestion control",
+		strings.ToLower(strings.TrimSpace(obfs.CongestionController)),
+		strings.ToLower(strings.TrimSpace(obfs.CongestionControlAlias)))
+	if err != nil {
+		return err
+	}
+	override, err := coalesceField("cc override",
+		strings.ToLower(strings.TrimSpace(obfs.CCOverride)),
+		strings.ToLower(strings.TrimSpace(obfs.CCOverrideAlias)))
+	if err != nil {
+		return err
+	}
+	if transport != "h3" && transport != "auto" && (cc != "" || override != "" || obfs.Cwnd != nil) {
+		return errors.New("snell congestion options require transport=h3 or auto")
+	}
+	if transport != "" {
+		query.Set("transport", transport)
+	}
+	if cc != "" {
+		query.Set("congestion_control", cc)
+	}
+	if override != "" {
+		query.Set("cc_override", override)
+	}
+	if obfs.Cwnd != nil {
+		query.Set("cwnd", strconv.Itoa(*obfs.Cwnd))
+	}
 	if !isECHTLS && (obfs.WSHost != "" || obfs.Path != "") {
 		return errors.New("snell WebSocket options are only accepted as ignored legacy ECH-TLS fields")
 	}
@@ -364,7 +412,12 @@ func addSnellObfsQuery(
 	if err != nil {
 		return err
 	}
-	identityVersion, err := resolveClashSnellIdentity(topLevelIdentity, obfs.IdentityVersion)
+	identityOption := topLevelIdentity
+	if (transport == "h3" || transport == "auto") && identityOption != nil && *identityOption {
+		// In H3 subscriptions the legacy boolean enables Identity, not v1.
+		identityOption = nil
+	}
+	identityVersion, err := resolveClashSnellIdentity(identityOption, obfs.IdentityVersion)
 	if err != nil {
 		return err
 	}

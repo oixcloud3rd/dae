@@ -22,7 +22,7 @@ parser maps `alpn`, `protocol`, `identity-version`, `legacy-fallback`,
 `android`, `edge`, `360`, `qq`, and `random` are translated to the
 corresponding outbound uTLS ClientHello IDs.
 
-Snell ECH-TLS uses the raw byte stream after the TLS handshake and does not use
+By default, Snell ECH-TLS uses the raw byte stream after the TLS handshake and does not use
 WebSocket framing. A legacy top-level scalar or single-item `alpn: [h2]` is
 migrated to `snell-ech/1` with explicit `legacy-fallback: true`; fallback is
 attempted only for ALPN incompatibility, and Identity v2 uses Identity v1 on
@@ -39,6 +39,50 @@ rejects non-empty `ech-config-file`, `ca-file`, `fingerprint`, `certificate`,
 `private-key`, and `headers` options because outbound links cannot represent
 them safely. Legacy `path` and `ws-host` values are accepted only as ignored
 ECH-TLS compatibility fields and are removed from generated links.
+
+## Snell HTTP/3
+
+`obfs-opts.transport` accepts `tcp` (default), `h3`, or `auto`. This is a
+custom HTTP/3 Extended CONNECT tunnel, not official Snell v5 QUIC mode.
+It requires v4/v5-compatible wire, ECH-TLS, certificate verification, and
+Identity v2. H3 subscriptions default to Identity v2; legacy `identity: true`
+can coexist with `identity-version: 2`. Explicit Identity v1/disabled, v6,
+simple-obfs, and `legacy-fallback: true` are rejected for H3.
+
+```yaml
+proxies:
+  - name: snell-h3
+    type: snell
+    server: server.example
+    port: 443
+    version: 4
+    psk: password
+    reuse: true
+    obfs-opts:
+      mode: ech-tls
+      transport: auto
+      identity-version: 2
+      sni: origin.example
+      ech-config: "<base64 ECHConfigList>"
+      preconnect: 1
+      congestion-controller: bbr3
+```
+
+`h3` has a 10-second tunnel establishment budget and does not fall back.
+`auto` tries H3 for 2 seconds, then uses ECH-TLS TCP at the same address/port,
+with a 30-second cooldown before retrying H3. Caller deadlines take precedence.
+Fallback retains certificate verification and Identity v2, defaults to
+`snell-ech/1` ALPN, and never replays Snell data. Fingerprints/uTLS apply only
+to TCP; H3 uses Go TLS 1.3 and `h3` ALPN. Legacy `path/ws-host` remain ignored.
+
+Under `obfs-opts`, `cc-override` overrides `congestion-controller`; aliases
+`cc_override` and `congestion_control` are accepted, but conflicting aliases
+are rejected. The default is experimental BBR3. Supported values are `bbr`,
+`bbr3`, `brutal`, and `reno`/`new_reno`. Unknown `congestion-controller` values
+(including `cubic`) warn when the node is built and use BBR3; invalid overrides
+reject the node. `cwnd` is a positive target rate for Brutal or an optional
+bandwidth upper-bound hint for BBR3, in bytes/second. These settings affect
+only client QUIC sending and require `h3/auto`. BBR profile fields are rejected.
 
 ## oixCloud managed configuration
 
